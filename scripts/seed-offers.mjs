@@ -19,7 +19,13 @@ if (Number(blendAmount) > 0) {
 }
 const tx = builder.setTimeout(120).build()
 tx.sign(keypair)
-const result = await horizon.submitTransaction(tx)
+let result
+try {
+  result = await horizon.submitTransaction(tx)
+} catch (error) {
+  console.error('submit failed', JSON.stringify(error?.response?.data?.extras?.result_codes ?? error?.message))
+  process.exit(1)
+}
 console.log('offers posted', result.hash)
 const offers = await horizon.offers().forAccount(keypair.publicKey()).call()
 console.log(offers.records.map((o) => `${o.amount} ${o.selling.asset_code}:${(o.selling.asset_issuer || '').slice(0, 6)} -> ${o.buying.asset_code}:${(o.buying.asset_issuer || '').slice(0, 6)} @ ${o.price}`))

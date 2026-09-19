@@ -288,14 +288,18 @@ export async function ensureTrustlines(signer: Signer, state: WalletState): Prom
   return submitClassic(signer, operations)
 }
 
+function withSlippage(amount: string, factor: number): string {
+  return (Number(amount) * factor).toFixed(7)
+}
+
 export async function payAnchorWithBlendUsdc(signer: Signer, amountUsdc: string, treasury: string, memoId: string): Promise<string> {
   const operations = [
-    Operation.pathPaymentStrictSend({
+    Operation.pathPaymentStrictReceive({
       sendAsset: blendUsdcAsset,
-      sendAmount: amountUsdc,
+      sendMax: withSlippage(amountUsdc, 1.03),
       destination: signer.address,
       destAsset: circleUsdcAsset,
-      destMin: amountUsdc,
+      destAmount: amountUsdc,
       path: [],
     }),
     Operation.payment({ destination: treasury, asset: circleUsdcAsset, amount: amountUsdc }),
@@ -303,14 +307,14 @@ export async function payAnchorWithBlendUsdc(signer: Signer, amountUsdc: string,
   return submitClassic(signer, operations, Memo.id(memoId))
 }
 
-export async function convertCircleToBlendUsdc(signer: Signer, amountUsdc: string): Promise<string> {
+export async function convertCircleToBlendUsdc(signer: Signer, receiveUsdc: string, sendMaxUsdc: string): Promise<string> {
   return submitClassic(signer, [
-    Operation.pathPaymentStrictSend({
+    Operation.pathPaymentStrictReceive({
       sendAsset: circleUsdcAsset,
-      sendAmount: amountUsdc,
+      sendMax: sendMaxUsdc,
       destination: signer.address,
       destAsset: blendUsdcAsset,
-      destMin: amountUsdc,
+      destAmount: receiveUsdc,
       path: [],
     }),
   ])
@@ -342,7 +346,6 @@ export async function getActivity(): Promise<ActivityEvent[]> {
           const kind = topics[1]
           if (kind !== 'opened' && kind !== 'repaid' && kind !== 'payout') return null
           const data = scValToNative(event.value) as Record<string, bigint | string>
-          const values = Object.values(data)
           if (kind === 'payout') {
             return {
               kind,
@@ -354,13 +357,15 @@ export async function getActivity(): Promise<ActivityEvent[]> {
               anchorTxId: String(data.anchor_tx_id),
             }
           }
+          const first = kind === 'opened' ? data.collateral_amount : data.repay_amount
+          const second = kind === 'opened' ? data.borrow_amount : data.withdraw_collateral
           return {
             kind,
             user: String(topics[2]),
             ledger: event.ledger,
             txHash: event.txHash,
-            a: BigInt(values[0] as bigint),
-            b: BigInt(values[1] as bigint),
+            a: BigInt(first as bigint),
+            b: BigInt(second as bigint),
           }
         })
         .filter((event): event is ActivityEvent => event !== null)

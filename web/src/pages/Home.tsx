@@ -360,11 +360,11 @@ function RepayCard({ signer, line, health, rate, refresh }: Shared) {
       const received = Number(settled.amountOut ?? quote.buyAmount)
       mark(3, 'done', `${formatAmount(received)} USDC`)
       mark(4, 'active')
-      const convertHash = await convertCircleToBlendUsdc(signer, received.toFixed(7))
+      const repayUsdc = Math.min(received * 0.97, health.debtUsdc * 1.001)
+      const convertHash = await convertCircleToBlendUsdc(signer, repayUsdc.toFixed(7), received.toFixed(7))
       mark(4, 'done', txLink(convertHash))
       mark(5, 'active')
-      const repayUsdc = Math.min(received, health.debtUsdc * 1.001)
-      const fullRepay = received >= health.debtUsdc
+      const fullRepay = received * 0.97 >= health.debtUsdc
       const withdrawXlm = withdrawAll && fullRepay ? health.collateralXlm * 2 : 0
       const hash = await repayLine(signer, toStroops(repayUsdc.toFixed(7)), toStroops(withdrawXlm.toFixed(7)))
       mark(5, 'done', txLink(hash))
