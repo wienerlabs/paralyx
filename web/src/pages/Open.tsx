@@ -1,4 +1,4 @@
-import { LineCard, OpenCard, WalletCard } from '../components/cards'
+import { LineCard, OpenCard, WalletCard, WithdrawCard } from '../components/cards'
 import { TokenIcon } from '../components/TokenIcon'
 import { IS_MAINNET } from '../config'
 import { useT, type DictKey } from '../lib/i18n'
@@ -17,6 +17,7 @@ export function Open() {
         <div className="space-y-5 lg:col-span-3">
           <WalletCard {...shared} />
           <OpenCard {...shared} />
+          <WithdrawCard {...shared} />
         </div>
         <div className="space-y-5 lg:col-span-2">
           <LineCard {...shared} />

@@ -166,6 +166,7 @@ export function Market() {
             icon={<TokenIcon symbol="TRY" size={32} />}
             stepped
             dense={false}
+            emptyLabel={IS_MAINNET ? t('emptyPayoutsMainnet') : t('emptyPayoutsTestnet')}
           />
           <PriceChart
             title={t('cumulativeUsdc')}
@@ -175,6 +176,7 @@ export function Market() {
             icon={<TokenIcon symbol="USDC" size={32} />}
             stepped
             dense={false}
+            emptyLabel={t('emptyBorrows')}
           />
         </div>
       </section>

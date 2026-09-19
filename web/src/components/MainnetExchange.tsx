@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowUpRight, Banknote, Bookmark, BookmarkCheck, Building2, ShieldCheck, X } from 'lucide-react'
 import { Asset, Memo } from '@stellar/stellar-sdk'
 import { USDT0_TRANSFER_URL, type SavedAccount } from '../config'
-import { blendUsdcAsset, checkDestination, convertUsdt0ToUsdc, ensureTrustlines, formatAmount, quoteStrictSend, repayLine, sendToExchange, toStroops, usdt0Asset, type DestinationCheck } from '../lib/chain'
+import { blendUsdcAsset, checkDestination, convertUsdt0ToUsdc, ensureTrustlines, formatAmount, quoteStrictSend, recordPayout, repayLine, sendToExchange, toStroops, usdt0Asset, type DestinationCheck } from '../lib/chain'
 import { lookupDirectory, type DirectoryEntry } from '../lib/directory'
 import { addHistory } from '../lib/history'
 import { removeAccount, saveAccount, useSavedAccounts } from '../lib/savedAccounts'
@@ -89,7 +89,7 @@ function useQuote(loader: (value: number) => Promise<number | null>) {
   return { quote, loading, fetch, reset: () => setQuote(null) }
 }
 
-function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
+function ExchangeCashOut({ signer, wallet, line, rate, refresh }: Shared) {
   const { t } = useT()
   const [exchangeId, setExchangeId] = useState<string>('paribu')
   const [destination, setDestination] = useState<string>(exchanges[0].deposit ?? '')
@@ -201,7 +201,7 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   const valid = reasons.length === 0 && !amountError && !flow.busy
 
   const submit = () =>
-    flow.run(['verifying', 'signing', 'sending', 'done'], async (mark) => {
+    flow.run(['verifying', 'signing', 'sending', 'recording', 'done'], async (mark) => {
       if (!signer) throw new Error(t('needWallet'))
       if (minXlm === null) throw new Error(t('reasonQuote'))
       setReceipt(null)
@@ -214,7 +214,20 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
       const hash = await sendToExchange(signer, numeric.toFixed(7), trimmed, memo, minXlm.toFixed(7))
       mark(1, 'done')
       mark(2, 'done', txLink(hash))
-      mark(3, 'done')
+      const tryEstimate = rate ? numeric * rate : 0
+      mark(3, 'active')
+      let recordHash: string | null = null
+      if (line && tryEstimate > 0) {
+        try {
+          recordHash = await recordPayout(signer, hash, BigInt(Math.round(tryEstimate * 100)))
+          mark(3, 'done', txLink(recordHash))
+        } catch {
+          mark(3, 'done', t('reasonLine'))
+        }
+      } else {
+        mark(3, 'done', line ? '·' : t('reasonLine'))
+      }
+      mark(4, 'done')
       setConfirmed(false)
       const links = [{ label: t('view'), href: txLink(hash) }, ...(preset ? [{ label: t('sellAtExchange'), href: preset.url }] : [])]
       setReceipt({
@@ -222,6 +235,7 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
         rows: [
           { label: t('sentUsdc'), value: `${formatAmount(numeric)} USDC` },
           { label: t('minReceived'), value: `${formatAmount(minXlm, 2)} XLM` },
+          { label: t('estimatedTry'), value: `₺${formatAmount(tryEstimate)}` },
           { label: t('toExchange'), value: `${preset?.name ?? t('exchangeOther')} · ${trimmed.slice(0, 6)}…${trimmed.slice(-6)}`, copy: trimmed },
           { label: t('exchangeMemo'), value: `${memoType} · ${memoValue.trim()}`, copy: memoValue.trim() },
         ],

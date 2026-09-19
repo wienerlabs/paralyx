@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ensureTrustlines, formatAmount, fromStroops, fundWithFriendbot, openLine, previewBorrowable, toStroops, type ActivityEvent } from '../lib/chain'
+import { ensureTrustlines, formatAmount, fromStroops, fundWithFriendbot, openLine, previewBorrowable, repayLine, toStroops, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
 import { CREDIT_LINE_CONTRACT, FRIENDBOT_URL, IS_MAINNET } from '../config'
 import { borrowAllowed, supplyAllowed } from '../lib/blend'
@@ -213,6 +213,85 @@ export function OpenCard({ signer, wallet, health, reserves, rate, refresh, pool
       </MotionButton>
       {!CREDIT_LINE_CONTRACT ? <p className="mt-2 text-xs text-mute">{t('contractPending')}</p> : !ready && signer ? <p className="mt-2 text-xs text-mute">{t('walletBody')}</p> : null}
       <Steps steps={flow.steps} />
+      {flow.error ? <p className="mt-3 break-all text-sm text-ink">{flow.error}</p> : null}
+    </div>
+  )
+}
+
+export function WithdrawCard({ signer, health, line, refresh }: Shared) {
+  const { t } = useT()
+  const [amount, setAmount] = useState('')
+  const [receipt, setReceipt] = useState<{ withdrawn: number; hash: string } | null>(null)
+  const flow = useFlow()
+  const collateral = health?.collateralXlm ?? 0
+  const debt = health?.debtUsdc ?? 0
+  const numeric = Number(amount.replace(',', '.')) || 0
+  useEffect(() => {
+    if (amount === '' && collateral > 0) setAmount(collateral.toFixed(2))
+  }, [collateral, amount])
+  if (!signer || collateral <= 0) return null
+  const reasons: string[] = []
+  if (!line) reasons.push(t('reasonLine'))
+  if (numeric <= 0) reasons.push(t('reasonAmount'))
+  if (numeric > collateral + 0.01) reasons.push(t('reasonBalance'))
+  if (debt > 0 && health && health.collateralValueUsd * (1 - Math.min(numeric, collateral) / collateral) < health.liabilityValueUsd * 1.05) reasons.push(t('reasonHealth'))
+  const valid = reasons.length === 0 && !flow.busy
+  const submit = () =>
+    flow.run(['signing', 'sending', 'done'], async (mark) => {
+      mark(0, 'active')
+      const requested = numeric >= collateral - 0.01 ? collateral * 1.002 : numeric
+      const hash = await repayLine(signer, 0n, toStroops(requested.toFixed(7)))
+      mark(0, 'done')
+      mark(1, 'done', txLink(hash))
+      mark(2, 'done')
+      setReceipt({ withdrawn: Math.min(numeric, collateral), hash })
+      setAmount('')
+      await refresh()
+    })
+  return (
+    <div className="card">
+      <h3 className="flex items-center gap-2 text-lg text-ink">
+        <TokenIcon symbol="XLM" size={22} /> {t('withdrawTitle')}
+      </h3>
+      <p className="mt-1 text-sm text-mute">{t('withdrawBody')}</p>
+      <div className="mt-4 flex items-center justify-between rounded-2xl border border-line px-4 py-3 text-sm">
+        <span className="text-mute">{t('inPool')}</span>
+        <span className="text-ink">{formatAmount(collateral)} XLM</span>
+      </div>
+      <div className="mt-3">
+        <label className="label flex items-center gap-2">
+          <TokenIcon symbol="XLM" size={16} /> {t('collateralXlm')}
+        </label>
+        <div className="flex gap-2">
+          <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={flow.busy} />
+          <button type="button" className="chip shrink-0" onClick={() => setAmount(collateral.toFixed(2))}>
+            {t('withdrawAll')}
+          </button>
+        </div>
+      </div>
+      <MotionButton className="mt-4" disabled={!valid} onClick={() => void submit()}>
+        {t('withdrawAction')}
+      </MotionButton>
+      {reasons.length > 0 ? (
+        <ul className="mt-2 space-y-1 text-xs text-mute">
+          {reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : null}
+      <Steps steps={flow.steps} />
+      {receipt ? (
+        <div className="mt-4 rounded-2xl border border-accent bg-accent-soft p-4 text-sm">
+          <div className="text-ink">{t('receiptWithdraw')}</div>
+          <div className="mt-1 flex justify-between text-mute">
+            <span>{t('withdrawnXlm')}</span>
+            <span className="text-ink">{formatAmount(receipt.withdrawn)} XLM</span>
+          </div>
+          <a className="mt-2 inline-block text-xs underline" href={txLink(receipt.hash)} target="_blank" rel="noreferrer">
+            {t('view')}
+          </a>
+        </div>
+      ) : null}
       {flow.error ? <p className="mt-3 break-all text-sm text-ink">{flow.error}</p> : null}
     </div>
   )

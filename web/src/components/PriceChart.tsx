@@ -35,6 +35,7 @@ export function PriceChart({
   height = 220,
   dense = true,
   minSpan = 0,
+  emptyLabel,
 }: {
   title: string
   subtitle: string
@@ -55,6 +56,7 @@ export function PriceChart({
   height?: number
   dense?: boolean
   minSpan?: number
+  emptyLabel?: string
 }) {
   const { t, lang } = useT()
   const [mode, setMode] = useState<'area' | 'candles'>('area')
@@ -144,8 +146,8 @@ export function PriceChart({
         {hasData ? (
           <PriceArea points={points} candles={candles} mode={allowCandles ? mode : 'area'} stepped={stepped} height={height} format={format} precision={precision} locale={lang === 'tr' ? 'tr-TR' : 'en-US'} dense={dense} minSpan={minSpan} onHover={setHover} />
         ) : (
-          <div className="flex items-center justify-center rounded-2xl bg-soft text-xs text-mute" style={{ height }}>
-            {loading ? <span className="live-dot" /> : t('noData')}
+          <div className="flex items-center justify-center rounded-2xl bg-soft px-6 text-center text-xs text-mute" style={{ height }}>
+            {loading ? <span className="live-dot" /> : (emptyLabel ?? t('noData'))}
           </div>
         )}
         {hover?.candle ? (
