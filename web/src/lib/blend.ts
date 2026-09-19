@@ -10,8 +10,8 @@ export const WETH_SAC = 'CAZAQB3D7KSLSNOSQKYD2V4JP5V2Y3B4RDJZRLBFCCIXDCTE3WHSY3U
 export const WBTC_SAC = 'CAP5AMC2OHNVREO66DFIN6DHJMPOBAJ2KCDDIMFBR7WWJH5RZBFM3UEI'
 
 const reserveList: { asset: string; symbol: TokenSymbol; label: string }[] = [
-  { asset: XLM_SAC, symbol: 'XLM', label: 'XLM' },
   { asset: BLEND_USDC_SAC, symbol: 'USDC', label: 'USDC' },
+  { asset: XLM_SAC, symbol: 'XLM', label: 'XLM' },
   { asset: WETH_SAC, symbol: 'ETH', label: 'wETH' },
   { asset: WBTC_SAC, symbol: 'BTC', label: 'wBTC' },
 ]

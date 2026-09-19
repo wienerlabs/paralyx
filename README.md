@@ -137,6 +137,18 @@ Tests (`cargo test`, 8 tests) run against a mock pool that records the forwarded
 
 Blend's testnet pool lends its own test USDC (issuer `GATALT…`). The anchor pays and accepts Circle's testnet USDC (issuer `GBBD47…`). They are different assets on testnet and the same asset on mainnet. The app bridges the gap with the Stellar DEX: cash-out uses a strict-receive path payment (Blend USDC in, exactly the anchor amount of Circle USDC out) followed by the memo payment to the treasury, and repayment converts the other way before calling `repay_line`. During the build the shared liquidity pool between the two issuers was one-sided, so the Paralyx market maker rebalanced it to roughly 2,000 USDC per side at 1:1 ([`cc265840…547f0`](https://stellar.expert/explorer/testnet/tx/cc2658404c263f9fe3a2244e412579f1351b40d28ec6dfe310e12756e76547f0)). On mainnet this whole section disappears.
 
+## The app
+
+Five screens behind a sidebar, all reading from chain and from the anchor, nothing mocked:
+
+- **Panel.** Available lira limit, collateral, debt, health factor, live lira and XLM charts, your activity.
+- **Piyasa.** The Blend v2 TestnetV2 pool: total supplied and borrowed in USD, utilization, every reserve with price, supply and borrow APR from Blend's three slope rate model, collateral factors. Below it, Paralyx's own cumulative lira payouts and USDC borrowed, built from contract events.
+- **Hareketler.** Protocol totals and the event feed, filterable to your address.
+- **Hat aç.** Wallet setup (friendbot and trustlines on testnet) and the collateral plus borrow form.
+- **Takas.** The exchange card: USDC to lira cashes out through the anchor, lira to USDC repays the line.
+
+Charts use Reflector's mainnet FX oracle for USD/TRY (hourly points, as far back as the oracle keeps history) and Stellar DEX trade aggregations for XLM/USDC. Wallet connection is a custom modal over Stellar Wallets Kit.
+
 ## Repository
 
 ```
