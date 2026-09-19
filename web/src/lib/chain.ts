@@ -1,9 +1,11 @@
 import {
+  Account,
   Address,
   Asset,
   BASE_FEE,
   Contract,
   Horizon,
+  Keypair,
   Memo,
   Operation,
   TransactionBuilder,
@@ -22,9 +24,9 @@ import {
   FRIENDBOT_URL,
   HORIZON_URL,
   NETWORK_PASSPHRASE,
-  READ_SOURCE_ACCOUNT,
   RPC_URL,
   SAFETY_BUFFER,
+  USDT0_ISSUER,
   XLM_SAC,
 } from '../config'
 
@@ -67,6 +69,8 @@ export const server = new rpc.Server(RPC_URL)
 export const horizon = new Horizon.Server(HORIZON_URL)
 export const blendUsdcAsset = new Asset('USDC', BLEND_USDC_ISSUER)
 export const circleUsdcAsset = new Asset('USDC', CIRCLE_USDC_ISSUER)
+export const usdt0Asset = USDT0_ISSUER ? new Asset('USDT0', USDT0_ISSUER) : null
+const readSource = new Account(Keypair.random().publicKey(), '0')
 
 const SEVEN = 10_000_000
 const TWELVE = 1_000_000_000_000
@@ -96,8 +100,8 @@ function i128Arg(value: bigint): xdr.ScVal {
 }
 
 async function simulateRead(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
-  const account = await server.getAccount(READ_SOURCE_ACCOUNT)
-  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
+  if (!contractId) throw new Error('contract not deployed on this network')
+  const tx = new TransactionBuilder(readSource, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
     .addOperation(new Contract(contractId).call(method, ...args))
     .setTimeout(30)
     .build()
@@ -240,6 +244,7 @@ export interface WalletState {
   xlm: number
   blendUsdc: number | null
   circleUsdc: number | null
+  usdt0: number | null
 }
 
 export async function getWalletState(address: string): Promise<WalletState> {
@@ -252,18 +257,21 @@ export async function getWalletState(address: string): Promise<WalletState> {
     const native = account.balances.find((b) => b.asset_type === 'native')
     const blend = find(blendUsdcAsset)
     const circle = find(circleUsdcAsset)
+    const usdt0 = usdt0Asset ? find(usdt0Asset) : undefined
     return {
       exists: true,
       xlm: native ? Number(native.balance) : 0,
       blendUsdc: blend ? Number(blend.balance) : null,
       circleUsdc: circle ? Number(circle.balance) : null,
+      usdt0: usdt0 ? Number(usdt0.balance) : null,
     }
   } catch {
-    return { exists: false, xlm: 0, blendUsdc: null, circleUsdc: null }
+    return { exists: false, xlm: 0, blendUsdc: null, circleUsdc: null, usdt0: null }
   }
 }
 
 export async function fundWithFriendbot(address: string): Promise<void> {
+  if (!FRIENDBOT_URL) throw new Error('friendbot is testnet only')
   const response = await fetch(`${FRIENDBOT_URL}?addr=${encodeURIComponent(address)}`)
   if (!response.ok) throw new Error('friendbot refused the request')
 }
@@ -280,12 +288,61 @@ async function submitClassic(signer: Signer, operations: xdr.Operation[], memo?:
   return result.hash
 }
 
-export async function ensureTrustlines(signer: Signer, state: WalletState): Promise<string | null> {
+export async function ensureTrustlines(signer: Signer, state: WalletState, includeUsdt0 = false): Promise<string | null> {
   const operations: xdr.Operation[] = []
   if (state.blendUsdc === null) operations.push(Operation.changeTrust({ asset: blendUsdcAsset }))
-  if (state.circleUsdc === null) operations.push(Operation.changeTrust({ asset: circleUsdcAsset }))
+  const sameUsdc = circleUsdcAsset.getIssuer() === blendUsdcAsset.getIssuer()
+  if (!sameUsdc && state.circleUsdc === null) operations.push(Operation.changeTrust({ asset: circleUsdcAsset }))
+  if (includeUsdt0 && usdt0Asset && state.usdt0 === null) operations.push(Operation.changeTrust({ asset: usdt0Asset }))
   if (operations.length === 0) return null
   return submitClassic(signer, operations)
+}
+
+export async function quoteStrictSend(sendAsset: Asset, amount: string, destAsset: Asset): Promise<number | null> {
+  const params = new URLSearchParams({ source_amount: amount })
+  if (sendAsset.isNative()) params.set('source_asset_type', 'native')
+  else {
+    params.set('source_asset_type', sendAsset.getAssetType())
+    params.set('source_asset_code', sendAsset.getCode())
+    params.set('source_asset_issuer', sendAsset.getIssuer() ?? '')
+  }
+  params.set('destination_assets', destAsset.isNative() ? 'native' : `${destAsset.getCode()}:${destAsset.getIssuer() ?? ''}`)
+  const response = await fetch(`${HORIZON_URL}/paths/strict-send?${params}`)
+  if (!response.ok) return null
+  const body = (await response.json()) as { _embedded: { records: { destination_amount: string }[] } }
+  const best = body._embedded.records.map((record) => Number(record.destination_amount)).sort((a, b) => b - a)[0]
+  return best ?? null
+}
+
+export async function sendToExchange(signer: Signer, amountUsdc: string, destination: string, memo: Memo, minXlm: string): Promise<string> {
+  return submitClassic(
+    signer,
+    [
+      Operation.pathPaymentStrictSend({
+        sendAsset: blendUsdcAsset,
+        sendAmount: amountUsdc,
+        destination,
+        destAsset: Asset.native(),
+        destMin: minXlm,
+        path: [],
+      }),
+    ],
+    memo,
+  )
+}
+
+export async function convertUsdt0ToUsdc(signer: Signer, amountUsdt0: string, minUsdc: string): Promise<string> {
+  if (!usdt0Asset) throw new Error('USDT0 is not available on this network')
+  return submitClassic(signer, [
+    Operation.pathPaymentStrictSend({
+      sendAsset: usdt0Asset,
+      sendAmount: amountUsdt0,
+      destination: signer.address,
+      destAsset: blendUsdcAsset,
+      destMin: minUsdc,
+      path: [],
+    }),
+  ])
 }
 
 function withSlippage(amount: string, factor: number): string {

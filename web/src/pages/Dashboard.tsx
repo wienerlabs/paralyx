@@ -7,6 +7,7 @@ import { MotionButton } from '../components/MotionButton'
 import { TokenIcon } from '../components/TokenIcon'
 import { hourlyBuckets, TrendCard } from '../components/TrendCard'
 import { getPoolOverview, type PoolOverview } from '../lib/blend'
+import { IS_MAINNET } from '../config'
 import { useT } from '../lib/i18n'
 import { useLivePrices } from '../lib/prices'
 import { useShared } from '../lib/useShared'
@@ -38,7 +39,7 @@ export function Dashboard() {
     <div>
       <section className="grid gap-6 pb-8 lg:grid-cols-5">
         <div className="flex flex-col justify-center py-4 lg:col-span-3">
-          <span className="pill">{t('heroKicker')}</span>
+          <span className="pill">{IS_MAINNET ? t('mainnetNotice') : t('heroKicker')}</span>
           <h1 className="mt-4 max-w-2xl text-4xl tracking-tight text-ink sm:text-6xl">{t('tagline')}</h1>
           <p className="mt-4 max-w-xl text-base text-mute sm:text-lg">{t('subtitle')}</p>
           <div className="mt-6 flex flex-wrap gap-2">

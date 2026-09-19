@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Activity, ArrowDownToLine, LayoutDashboard, LineChart, RefreshCw } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { IS_MAINNET, NETWORK_ID, switchNetwork } from '../config'
 import { useT, type DictKey } from '../lib/i18n'
 import { shortAddress, useWallet } from '../lib/wallet'
 import { MotionButton } from './MotionButton'
@@ -66,7 +67,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           ))}
         </div>
         <div className="mt-auto space-y-2 px-3 text-xs text-mute">
-          <span className="pill">{t('testnet')}</span>
+          <span className="pill">{IS_MAINNET ? t('mainnetNotice') : t('testnet')}</span>
         </div>
       </aside>
 
@@ -77,6 +78,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </NavLink>
           <div className="hidden text-sm text-mute lg:block">{t('tagline')}</div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center rounded-full border border-line p-0.5 text-xs">
+              {(['testnet', 'mainnet'] as const).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => id !== NETWORK_ID && switchNetwork(id)}
+                  className={'rounded-full px-2.5 py-1 transition ' + (NETWORK_ID === id ? 'bg-ink text-white' : 'text-mute hover:text-ink')}
+                >
+                  {id === 'testnet' ? 'Testnet' : 'Mainnet'}
+                </button>
+              ))}
+            </div>
             <motion.button
               type="button"
               whileTap={{ scale: 0.94 }}

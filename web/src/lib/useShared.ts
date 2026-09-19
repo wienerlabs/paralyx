@@ -14,6 +14,8 @@ import {
 } from './chain'
 import type { Shared } from './shared'
 import { useWallet } from './wallet'
+import { HAS_SANDBOX_ANCHOR } from '../config'
+import { useLivePrices } from './prices'
 
 let rateCache: { at: number; value: number } | null = null
 
@@ -27,6 +29,7 @@ export function useShared(): Shared & { events: ActivityEvent[]; allEvents: Acti
   const [events, setEvents] = useState<ActivityEvent[]>([])
   const [allEvents, setAllEvents] = useState<ActivityEvent[]>([])
   const [loading, setLoading] = useState(false)
+  const live = useLivePrices()
 
   const refresh = useCallback(async () => {
     if (!address) {
@@ -63,6 +66,7 @@ export function useShared(): Shared & { events: ActivityEvent[]; allEvents: Acti
 
   useEffect(() => {
     getReserves().then(setReserves).catch(() => setReserves(null))
+    if (!HAS_SANDBOX_ANCHOR) return
     if (rateCache && Date.now() - rateCache.at < 60_000) return
     quoteUsdcToTry(1)
       .then((quote) => {
@@ -72,5 +76,6 @@ export function useShared(): Shared & { events: ActivityEvent[]; allEvents: Acti
       .catch(() => setRate(null))
   }, [])
 
-  return { signer, wallet, line, health, reserves, rate, refresh, events, allEvents, loading }
+  const effectiveRate = HAS_SANDBOX_ANCHOR ? rate : live.tryPerUsd
+  return { signer, wallet, line, health, reserves, rate: effectiveRate, refresh, events, allEvents, loading }
 }

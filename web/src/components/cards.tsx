@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ensureTrustlines, formatAmount, fromStroops, fundWithFriendbot, openLine, previewBorrowable, toStroops, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
+import { CREDIT_LINE_CONTRACT, FRIENDBOT_URL, IS_MAINNET } from '../config'
 import { useLivePrices } from '../lib/prices'
 import { getTryPerUsdHistory, getXlmUsdHistory } from '../lib/reflector'
 import { txLink, useFlow, type Shared } from '../lib/shared'
@@ -84,8 +85,8 @@ export function WalletCard({ signer, wallet, refresh }: Shared) {
   const { t } = useT()
   const flow = useFlow()
   if (!signer || !wallet) return null
-  const needsXlm = !wallet.exists || wallet.xlm < 20
-  const needsTrust = wallet.blendUsdc === null || wallet.circleUsdc === null
+  const needsXlm = !wallet.exists || wallet.xlm < (IS_MAINNET ? 3 : 20)
+  const needsTrust = wallet.blendUsdc === null || (!IS_MAINNET && wallet.circleUsdc === null)
   if (!needsXlm && !needsTrust) return null
   const fund = () =>
     flow.run(['sending', 'done'], async (mark) => {
@@ -108,7 +109,7 @@ export function WalletCard({ signer, wallet, refresh }: Shared) {
       <h3 className="text-lg text-ink">{t('walletTitle')}</h3>
       <p className="mt-1 text-sm text-mute">{t('walletBody')}</p>
       <div className="mt-4 flex flex-wrap gap-2">
-        {needsXlm ? (
+        {needsXlm && FRIENDBOT_URL ? (
           <MotionButton disabled={flow.busy} onClick={() => void fund()}>
             <TokenIcon symbol="XLM" size={18} /> {t('fund')}
           </MotionButton>
@@ -135,7 +136,7 @@ export function OpenCard({ signer, wallet, health, reserves, rate, refresh }: Sh
     const xlm = Number(collateral.replace(',', '.')) || 0
     return previewBorrowable(xlm, reserves.xlm, reserves.usdc, health)
   }, [collateral, health, reserves])
-  const ready = Boolean(signer && wallet?.exists && wallet.blendUsdc !== null)
+  const ready = Boolean(signer && wallet?.exists && wallet.blendUsdc !== null && CREDIT_LINE_CONTRACT)
   const borrowNumber = Number(borrow.replace(',', '.')) || 0
   const collateralNumber = Number(collateral.replace(',', '.')) || 0
   const valid =
@@ -185,7 +186,7 @@ export function OpenCard({ signer, wallet, health, reserves, rate, refresh }: Sh
       <MotionButton className="mt-4" disabled={!valid || flow.busy} onClick={() => void submit()}>
         {t('open')}
       </MotionButton>
-      {!ready && signer ? <p className="mt-2 text-xs text-mute">{t('walletBody')}</p> : null}
+      {!CREDIT_LINE_CONTRACT ? <p className="mt-2 text-xs text-mute">{t('contractPending')}</p> : !ready && signer ? <p className="mt-2 text-xs text-mute">{t('walletBody')}</p> : null}
       <Steps steps={flow.steps} />
       {flow.error ? <p className="mt-3 break-all text-sm text-ink">{flow.error}</p> : null}
     </div>

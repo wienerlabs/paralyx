@@ -2,10 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { StellarWalletsKit } from '@creit.tech/stellar-wallets-kit/sdk'
 import { defaultModules } from '@creit.tech/stellar-wallets-kit/modules/utils'
 import { Networks, type ISupportedWallet } from '@creit.tech/stellar-wallets-kit/types'
-import { NETWORK_PASSPHRASE } from '../config'
+import { IS_MAINNET, NETWORK_PASSPHRASE } from '../config'
 import type { Signer } from './chain'
 
-StellarWalletsKit.init({ modules: defaultModules(), network: Networks.TESTNET })
+StellarWalletsKit.init({ modules: defaultModules(), network: IS_MAINNET ? Networks.PUBLIC : Networks.TESTNET })
 
 interface WalletContextValue {
   address: string | null

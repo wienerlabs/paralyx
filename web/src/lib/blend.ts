@@ -1,20 +1,13 @@
-import { Address, BASE_FEE, Contract, TransactionBuilder, rpc, scValToNative, xdr } from '@stellar/stellar-sdk'
-import { BLEND_ORACLE, BLEND_POOL, BLEND_USDC_SAC, CREDIT_LINE_CONTRACT, NETWORK_PASSPHRASE, READ_SOURCE_ACCOUNT, RPC_URL, XLM_SAC } from '../config'
+import { Account, Address, BASE_FEE, Contract, Keypair, TransactionBuilder, rpc, scValToNative, xdr } from '@stellar/stellar-sdk'
+import { BLEND_ORACLE, BLEND_POOL, CREDIT_LINE_CONTRACT, NETWORK, NETWORK_PASSPHRASE, RPC_URL } from '../config'
 import type { TokenSymbol } from '../components/TokenIcon'
 
 const server = new rpc.Server(RPC_URL)
 const SEVEN = 10_000_000
 const TWELVE = 1_000_000_000_000
+const readSource = new Account(Keypair.random().publicKey(), '0')
 
-export const WETH_SAC = 'CAZAQB3D7KSLSNOSQKYD2V4JP5V2Y3B4RDJZRLBFCCIXDCTE3WHSY3UE'
-export const WBTC_SAC = 'CAP5AMC2OHNVREO66DFIN6DHJMPOBAJ2KCDDIMFBR7WWJH5RZBFM3UEI'
-
-const reserveList: { asset: string; symbol: TokenSymbol; label: string }[] = [
-  { asset: BLEND_USDC_SAC, symbol: 'USDC', label: 'USDC' },
-  { asset: XLM_SAC, symbol: 'XLM', label: 'XLM' },
-  { asset: WETH_SAC, symbol: 'ETH', label: 'wETH' },
-  { asset: WBTC_SAC, symbol: 'BTC', label: 'wBTC' },
-]
+const reserveList: { asset: string; symbol: TokenSymbol; label: string }[] = NETWORK.reserves
 
 export interface ReserveRow {
   asset: string
@@ -42,8 +35,8 @@ export interface PoolOverview {
 }
 
 async function read(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
-  const account = await server.getAccount(READ_SOURCE_ACCOUNT)
-  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
+  if (!contractId) throw new Error('contract not deployed on this network')
+  const tx = new TransactionBuilder(readSource, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
     .addOperation(new Contract(contractId).call(method, ...args))
     .setTimeout(30)
     .build()
@@ -71,7 +64,7 @@ function borrowRate(config: RawReserve['config'], irMod: number, utilization: nu
 export async function getPoolOverview(): Promise<PoolOverview> {
   const config = (await read(BLEND_POOL, 'get_config', [])) as { bstop_rate: number }
   const backstopRate = Number(config.bstop_rate) / SEVEN
-  const lineCount = Number(await read(CREDIT_LINE_CONTRACT, 'get_line_count', []).catch(() => 0))
+  const lineCount = CREDIT_LINE_CONTRACT ? Number(await read(CREDIT_LINE_CONTRACT, 'get_line_count', []).catch(() => 0)) : 0
   const rows = await Promise.all(
     reserveList.map(async (entry): Promise<ReserveRow> => {
       const raw = (await read(BLEND_POOL, 'get_reserve', [new Address(entry.asset).toScVal()])) as RawReserve
