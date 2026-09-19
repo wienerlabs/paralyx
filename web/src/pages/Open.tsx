@@ -1,4 +1,5 @@
 import { LineCard, OpenCard, WalletCard } from '../components/cards'
+import { TokenIcon } from '../components/TokenIcon'
 import { useT, type DictKey } from '../lib/i18n'
 import { useShared } from '../lib/useShared'
 
@@ -18,6 +19,27 @@ export function Open() {
         </div>
         <div className="space-y-5 lg:col-span-2">
           <LineCard {...shared} />
+          <div className="card">
+            <h3 className="text-lg text-ink">{t('soonTitle')}</h3>
+            <ul className="mt-3 space-y-3 text-sm text-mute">
+              <li className="flex gap-3">
+                <TokenIcon symbol="USDC" size={20} className="mt-0.5" />
+                <span>{t('soonUsdt0')}</span>
+              </li>
+              <li className="flex gap-3">
+                <TokenIcon symbol="USDC" size={20} className="mt-0.5" />
+                <span>{t('soonCctp')}</span>
+              </li>
+              <li className="flex gap-3">
+                <TokenIcon symbol="TRY" size={20} className="mt-0.5" />
+                <span>{t('soonAnchor')}</span>
+              </li>
+              <li className="flex gap-3">
+                <TokenIcon symbol="XLM" size={20} className="mt-0.5" />
+                <span>{t('soonSpp')}</span>
+              </li>
+            </ul>
+          </div>
           <div className="card">
             <h3 className="text-lg text-ink">{t('how')}</h3>
             <ol className="mt-3 space-y-2 text-sm text-mute">
