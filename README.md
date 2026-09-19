@@ -178,6 +178,14 @@ Five screens behind a sidebar, all reading from chain and from the anchor, nothi
 
 Charts use Reflector's mainnet FX oracle for USD/TRY (hourly points, as far back as the oracle keeps history) and Stellar DEX trade aggregations for XLM/USDC; the live values on the dashboard poll Reflector's `lastprice` and the mainnet XLM/USDC order book every 15 seconds. Hourly trend cards bucket contract events by ledger close time. Wallet connection is a custom modal over Stellar Wallets Kit.
 
+### Data layer
+
+Every read goes through a small cache in `web/src/lib/store.ts`: keyed entries with a time to live, in-flight de-duplication, background revalidation while the tab is visible, and a persisted snapshot in `localStorage` (bigint safe) so a returning visitor sees the last known state at first paint while fresh data loads behind it. Screens update field by field as each request lands instead of waiting for the slowest one. Contract events are kept in an incremental local log and only the ledgers after the last scan are fetched; Reflector hourly points are cached per hour; Blend reserve reads are shared between the market table and the health calculation; navigation links prefetch their page's data on hover. RPC calls run through a concurrency limited pool with retry and, on mainnet, a second endpoint as fallback. The header shows a small pulse while anything is updating.
+
+### Exchange cash-out on mainnet
+
+The exchange picker carries the exchanges' own icons. Choosing Paribu fills its XLM deposit account from the stellar.expert directory (`GBZLHGDY…ZQKVA`, tagged exchange and memo required); the user only adds the memo from their own Paribu account. Every destination is checked on Horizon and looked up in the directory: an unknown address is flagged, an address that belongs to a different exchange than the one selected locks the send, and memo required is enforced whether it comes from the SEP-29 on-chain flag or the directory tag.
+
 ## Repository
 
 ```
