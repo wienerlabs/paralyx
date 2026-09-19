@@ -75,12 +75,12 @@ export function ExchangeCard({ signer, wallet, line, health, rate, refresh }: Sh
     if (!amount || numeric <= 0) return null
     if (cashOut) {
       if (numeric < MIN_USDC || numeric > ANCHOR_MAX_USDC) return t('amountRange').replace('{min}', `${MIN_USDC} USDC`).replace('{max}', `${ANCHOR_MAX_USDC} USDC`)
-      if (numeric > available) return t('reasonBalance')
+      if (wallet && numeric > available) return t('reasonBalance')
       return null
     }
     if (numeric < MIN_TRY || numeric > ANCHOR_MAX_TRY) return t('amountRange').replace('{min}', `₺${MIN_TRY}`).replace('{max}', `₺${ANCHOR_MAX_TRY}`)
     return null
-  }, [amount, numeric, cashOut, available, t])
+  }, [amount, numeric, cashOut, available, wallet, t])
 
   const reasons: string[] = []
   if (!signer) reasons.push(t('reasonWallet'))

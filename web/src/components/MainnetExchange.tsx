@@ -152,7 +152,7 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
     }
   }
 
-  const amountError = numeric > 0 && numeric > available ? t('reasonBalance') : null
+  const amountError = wallet && numeric > 0 && numeric > available ? t('reasonBalance') : null
   const reasons: string[] = []
   if (!signer) reasons.push(t('reasonWallet'))
   if (numeric <= 0) reasons.push(t('reasonAmount'))
@@ -513,7 +513,7 @@ function UsdcRepay({ signer, wallet, line, health, refresh }: Shared) {
     if (amount === '' && maxRepay > 0) setAmount(maxRepay.toFixed(2))
   }, [maxRepay, amount])
 
-  const amountError = numeric > 0 && numeric > balance ? t('reasonBalance') : null
+  const amountError = wallet && numeric > 0 && numeric > balance ? t('reasonBalance') : null
   const reasons: string[] = []
   if (!signer) reasons.push(t('reasonWallet'))
   else if (!line) reasons.push(t('reasonLine'))
