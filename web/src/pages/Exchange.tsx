@@ -12,7 +12,7 @@ export function Exchange() {
     <div>
       <section className="pb-6">
         <h1 className="text-3xl tracking-tight text-ink sm:text-4xl">{t('exchangeTitleLong')}</h1>
-        <p className="mt-2 max-w-2xl text-base text-mute">{t('cashBody')}</p>
+        <p className="mt-2 max-w-2xl text-base text-mute">{HAS_SANDBOX_ANCHOR ? t('cashBody') : t('exchangeBodyMainnet')}</p>
       </section>
       <section className="grid gap-5 lg:grid-cols-5">
         <div className="lg:col-span-3">

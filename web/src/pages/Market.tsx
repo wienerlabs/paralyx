@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BLEND_POOL, CREDIT_LINE_CONTRACT, EXPLORER_CONTRACT } from '../config'
+import { BLEND_POOL, CREDIT_LINE_CONTRACT, EXPLORER_CONTRACT, IS_MAINNET } from '../config'
 import { getPoolOverview, type PoolOverview } from '../lib/blend'
 import { formatAmount, getActivity, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
@@ -73,7 +73,7 @@ export function Market() {
     <div>
       <section className="pb-6">
         <h1 className="text-3xl tracking-tight text-ink sm:text-4xl">{t('marketTitle')}</h1>
-        <p className="mt-2 max-w-2xl text-base text-mute">{t('marketSubtitle')}</p>
+        <p className="mt-2 max-w-2xl text-base text-mute">{IS_MAINNET ? t('marketSubtitleMainnet') : t('marketSubtitle')}</p>
       </section>
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
@@ -85,7 +85,7 @@ export function Market() {
       </section>
       <section className="card mt-5 overflow-x-auto">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-lg text-ink">Blend v2 · TestnetV2</h3>
+          <h3 className="text-lg text-ink">{IS_MAINNET ? t('poolNameMainnet') : t('poolNameTestnet')}</h3>
           <a className="text-xs text-mute underline" href={`${EXPLORER_CONTRACT}${BLEND_POOL}`} target="_blank" rel="noreferrer">
             {BLEND_POOL.slice(0, 8)}…{BLEND_POOL.slice(-6)}
           </a>

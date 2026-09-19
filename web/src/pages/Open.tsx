@@ -1,5 +1,6 @@
 import { LineCard, OpenCard, WalletCard } from '../components/cards'
 import { TokenIcon } from '../components/TokenIcon'
+import { IS_MAINNET } from '../config'
 import { useT, type DictKey } from '../lib/i18n'
 import { useShared } from '../lib/useShared'
 
@@ -24,7 +25,7 @@ export function Open() {
             <ul className="mt-3 space-y-3 text-sm text-mute">
               <li className="flex gap-3">
                 <TokenIcon symbol="USDC" size={20} className="mt-0.5" />
-                <span>{t('soonUsdt0')}</span>
+                <span>{IS_MAINNET ? t('soonUsdt0Mainnet') : t('soonUsdt0')}</span>
               </li>
               <li className="flex gap-3">
                 <TokenIcon symbol="USDC" size={20} className="mt-0.5" />
