@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, RefreshCw } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { Memo } from '@stellar/stellar-sdk'
 import { USDT0_TRANSFER_URL } from '../config'
 import { convertUsdt0ToUsdc, ensureTrustlines, formatAmount, quoteStrictSend, repayLine, sendToExchange, toStroops, blendUsdcAsset, usdt0Asset } from '../lib/chain'
@@ -163,41 +163,50 @@ function Usdt0Repay({ signer, wallet, line, health, refresh }: Shared) {
     <div className="card">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-lg text-ink">
-          <RefreshCw className="h-5 w-5" />
+          <TokenIcon symbol="USDT0" size={22} />
           {t('usdt0Title')}
         </h3>
-        <span className="pill">LayerZero · USDT0</span>
+        <span className="pill">
+          <TokenIcon symbol="USDT0" size={14} className="mr-1.5" /> LayerZero · USDT0
+        </span>
       </div>
       <p className="mt-1 text-sm text-mute">{t('usdt0Body')}</p>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line px-4 py-3 text-sm">
-        <span className="text-mute">{t('usdt0Balance')}</span>
+        <span className="inline-flex items-center gap-2 text-mute">
+          <TokenIcon symbol="USDT0" size={20} />
+          {t('usdt0Balance')}
+        </span>
         <span className="text-ink">{balance === null ? '·' : `${formatAmount(balance)} USDT0`}</span>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {balance === null && signer ? (
           <MotionButton variant="ghost" disabled={flow.busy} onClick={() => void trust()}>
-            {t('usdt0Trust')}
+            <TokenIcon symbol="USDT0" size={18} /> {t('usdt0Trust')}
           </MotionButton>
         ) : null}
         <a className="btn-ghost" href={USDT0_TRANSFER_URL} target="_blank" rel="noreferrer">
-          {t('usdt0Bring')} <ArrowUpRight className="h-4 w-4" />
+          <TokenIcon symbol="USDT0" size={18} /> {t('usdt0Bring')} <ArrowUpRight className="h-4 w-4" />
         </a>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="label">USDT0</label>
+          <label className="label flex items-center gap-2">
+            <TokenIcon symbol="USDT0" size={16} /> USDT0
+          </label>
           <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
           <div className="mt-1 text-xs text-mute">
             {t('debt')}: {formatAmount(debt)} USDC
           </div>
         </div>
         <div>
-          <label className="label">{t('minReceive')}</label>
+          <label className="label flex items-center gap-2">
+            <TokenIcon symbol="USDC" size={16} /> {t('minReceive')}
+          </label>
           <div className="input bg-soft">{quote !== null ? `${formatAmount(quote * 0.99, 4)} USDC` : '·'}</div>
         </div>
       </div>
       <MotionButton full className="mt-4 py-3" disabled={!valid || flow.busy} onClick={() => void submit()}>
-        {t('usdt0Repay')}
+        <TokenIcon symbol="USDT0" size={18} /> {t('usdt0Repay')}
       </MotionButton>
       <Steps steps={flow.steps} />
       {flow.error ? <p className="mt-3 break-all text-sm text-ink">{flow.error}</p> : null}

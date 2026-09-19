@@ -24,7 +24,7 @@ export function Open() {
             <h3 className="text-lg text-ink">{t('soonTitle')}</h3>
             <ul className="mt-3 space-y-3 text-sm text-mute">
               <li className="flex gap-3">
-                <TokenIcon symbol="USDC" size={20} className="mt-0.5" />
+                <TokenIcon symbol="USDT0" size={20} className="mt-0.5" />
                 <span>{IS_MAINNET ? t('soonUsdt0Mainnet') : t('soonUsdt0')}</span>
               </li>
               <li className="flex gap-3">

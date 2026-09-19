@@ -1,7 +1,8 @@
-export type TokenSymbol = 'USDC' | 'XLM' | 'TRY' | 'ETH' | 'BTC'
+export type TokenSymbol = 'USDC' | 'USDT0' | 'XLM' | 'TRY' | 'ETH' | 'BTC'
 
 const sources: Record<TokenSymbol, string> = {
   USDC: '/tokens/usdc.svg',
+  USDT0: '/tokens/usdt0.png',
   XLM: '/tokens/xlm.svg',
   TRY: '/tokens/tr.svg',
   ETH: '/tokens/eth.svg',
@@ -10,6 +11,7 @@ const sources: Record<TokenSymbol, string> = {
 
 export const tokenNames: Record<TokenSymbol, string> = {
   USDC: 'USD Coin',
+  USDT0: 'USDT0, Tether over LayerZero',
   XLM: 'Stellar Lumens',
   TRY: 'Türk lirası',
   ETH: 'Wrapped Ether',

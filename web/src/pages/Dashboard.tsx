@@ -67,6 +67,11 @@ export function Dashboard() {
             </span>
             <span className="pill">Stellar Wallets Kit</span>
             <span className="pill">Reflector</span>
+            {IS_MAINNET ? (
+              <span className="pill">
+                <TokenIcon symbol="USDT0" size={14} className="mr-1.5" /> USDT0 · LayerZero
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="lg:col-span-2">

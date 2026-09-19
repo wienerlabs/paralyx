@@ -67,6 +67,14 @@ export function WalletMenu() {
                 </span>
                 <span className="text-ink">{state && state.blendUsdc !== null ? formatAmount(state.blendUsdc) : '·'}</span>
               </div>
+              {state && state.usdt0 !== null ? (
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-2 text-mute">
+                    <TokenIcon symbol="USDT0" size={18} /> USDT0
+                  </span>
+                  <span className="text-ink">{formatAmount(state.usdt0)}</span>
+                </div>
+              ) : null}
             </div>
             <div className="mt-4 flex gap-2">
               <MotionButton variant="ghost" className="flex-1" onClick={() => void copy()}>
