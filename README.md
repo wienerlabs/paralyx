@@ -192,7 +192,7 @@ Both networks share one set of exchange primitives: a segmented mode switch, an 
 
 ### Exchange cash-out on mainnet
 
-The exchange picker carries the exchanges' own icons. Choosing Paribu fills its XLM deposit account from the stellar.expert directory (`GBZLHGDY…ZQKVA`, tagged exchange and memo required); the user only adds the memo from their own Paribu account. Every destination is checked on Horizon and looked up in the directory: an unknown address is flagged, an address that belongs to a different exchange than the one selected locks the send, and memo required is enforced whether it comes from the SEP-29 on-chain flag or the directory tag.
+The exchange picker carries the exchanges' own icons. Choosing Paribu fills its current XLM deposit wallet (`GAMZLXGV…QNAGH`, the account Paribu's app shows to depositors, about 1.6M XLM and hundreds of inbound payments a day); the older `GBZLHGDY…ZQKVA` listed in the stellar.expert directory is also recognised. The user only adds the memo from their own Paribu account. Saved accounts let a device remember an exchange address and memo behind one chip; the app also ships one built-in saved account for the founder's own Paribu deposit so the demo runs from a fresh browser. Every destination is checked on Horizon and looked up in the directory: an unknown address is flagged, an address that belongs to a different exchange than the one selected locks the send, and memo required is enforced whether it comes from the SEP-29 on-chain flag or the directory tag.
 
 ## Repository
 

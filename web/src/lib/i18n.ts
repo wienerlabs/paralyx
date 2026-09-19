@@ -230,7 +230,7 @@ const dictionary = {
   footerBuilt: { tr: 'Rise In x Stellar Pro Hackathon, İstanbul 2026', en: 'Rise In x Stellar Pro Hackathon, Istanbul 2026' },
   updating: { tr: 'güncelleniyor', en: 'updating' },
   exchangePickTitle: { tr: 'Borsanı seç', en: 'Pick your exchange' },
-  presetFilled: { tr: 'Yatırma adresi stellar.expert dizininden dolduruldu. Memo\'yu kendi hesabından al.', en: 'Deposit address filled from the stellar.expert directory. Take the memo from your own account.' },
+  presetFilled: { tr: 'Yatırma adresi borsa ön ayarından dolduruldu. Memo\'yu kendi hesabından al.', en: 'Deposit address filled from the exchange preset. Take the memo from your own account.' },
   directoryListed: { tr: 'Dizin kaydı', en: 'Directory entry' },
   directoryNotListed: { tr: 'Adres stellar.expert dizininde kayıtlı değil; bir borsanın yatırma adresi olduğundan emin ol.', en: 'The address is not in the stellar.expert directory; make sure it is an exchange deposit address.' },
   directoryMismatch: { tr: 'Dizine göre bu adres seçtiğin borsaya ait değil. Gönderim kilitlendi; borsayı değiştir veya adresi düzelt.', en: 'According to the directory this address does not belong to the selected exchange. Sending is locked; change the exchange or fix the address.' },
