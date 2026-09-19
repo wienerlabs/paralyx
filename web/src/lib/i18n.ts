@@ -117,7 +117,7 @@ const dictionary = {
   chartTry: { tr: 'Türk lirası', en: 'Turkish lira' },
   chartTrySub: { tr: '1 USD kaç lira, Reflector mainnet', en: 'Lira per USD, Reflector mainnet' },
   chartXlm: { tr: 'XLM', en: 'XLM' },
-  chartXlmSub: { tr: 'XLM fiyatı USD, Reflector mainnet', en: 'XLM price in USD, Reflector mainnet' },
+  chartXlmSub: { tr: 'XLM fiyatı USDC, Stellar DEX mainnet', en: 'XLM price in USDC, Stellar DEX mainnet' },
   last24h: { tr: 'Son 24 saat', en: 'Last 24 hours' },
   cashOutAction: { tr: 'Lira çek', en: 'Cash out lira' },
   repayAction: { tr: 'Lirayla geri öde', en: 'Repay in lira' },
@@ -126,6 +126,7 @@ const dictionary = {
   noDebtHint: { tr: 'Geri ödenecek borç yok.', en: 'No debt to repay.' },
   close: { tr: 'Kapat', en: 'Close' },
   network: { tr: 'Ağ', en: 'Network' },
+  lastHours: { tr: 'Son {h} saat', en: 'Last {h} hours' },
 } as const
 
 export type DictKey = keyof typeof dictionary

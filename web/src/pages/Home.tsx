@@ -249,6 +249,12 @@ export function ActivityList({ events, title }: { events: ActivityEvent[]; title
   )
 }
 
+function spanLabel(points: Point[], template: string): string {
+  if (points.length < 2) return ''
+  const hours = Math.max(1, Math.round((points[points.length - 1].t - points[0].t) / 3_600_000))
+  return template.replace('{h}', String(hours))
+}
+
 function Charts() {
   const { t } = useT()
   const [tryPoints, setTryPoints] = useState<Point[]>([])
@@ -265,7 +271,7 @@ function Charts() {
         points={tryPoints}
         format={(value) => `₺${formatAmount(value)}`}
         icon={<TokenIcon symbol="TRY" size={32} />}
-        footer={t('last24h')}
+        footer={spanLabel(tryPoints, t('lastHours'))}
       />
       <PriceChart
         title={t('chartXlm')}
@@ -273,7 +279,7 @@ function Charts() {
         points={xlmPoints}
         format={(value) => `$${formatAmount(value, 4)}`}
         icon={<TokenIcon symbol="XLM" size={32} />}
-        footer={t('last24h')}
+        footer={spanLabel(xlmPoints, t('lastHours'))}
       />
     </>
   )
