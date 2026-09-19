@@ -37,7 +37,7 @@ export function TrendCard({
           <h3 className="text-2xl tracking-tight text-ink">{title}</h3>
           <p className="text-2xl tracking-tight text-mute">{subtitle}</p>
         </div>
-        <motion.span whileHover={{ rotate: 45 }} className="inline-flex rounded-full border border-line bg-white p-2 text-ink">
+        <motion.span whileHover={{ rotate: 45 }} className="inline-flex rounded-full border border-line bg-surface p-2 text-ink">
           {icon}
         </motion.span>
       </div>
@@ -52,7 +52,7 @@ export function TrendCard({
               className="pointer-events-none absolute -top-9 left-0 w-full"
             >
               <div
-                className="inline-block rounded-full bg-ink px-2.5 py-1 text-xs text-white shadow"
+                className="inline-block rounded-full bg-accent px-2.5 py-1 text-xs text-on-accent shadow"
                 style={{ marginLeft: `${((hovered + 0.5) / data.length) * 100}%`, transform: 'translateX(-50%)' }}
               >
                 {format(data[hovered].value)}
@@ -71,7 +71,7 @@ export function TrendCard({
                   <motion.div
                     className="w-full rounded-t-md"
                     style={{ height }}
-                    animate={{ backgroundColor: isHovered ? '#111111' : isAdjacent ? '#9a9a9a' : '#e6e6e6' }}
+                    animate={{ backgroundColor: isHovered ? 'var(--color-accent-strong)' : isAdjacent ? 'var(--color-accent)' : 'var(--color-line)' }}
                     transition={{ duration: 0.25, ease: 'easeInOut' }}
                   />
                 </div>

@@ -10,6 +10,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Exchange } from './pages/Exchange'
 import { Market } from './pages/Market'
 import { Open } from './pages/Open'
+import { NotFound } from './pages/NotFound'
 
 export default function App() {
   const [lang, setLang] = useState<Lang>(() => {
@@ -42,6 +43,7 @@ export default function App() {
               <Route path="/market" element={<Market />} />
               <Route path="/activity" element={<Activity />} />
               <Route path="/stats" element={<Activity />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </Shell>
           <ConnectModal />

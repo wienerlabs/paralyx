@@ -74,10 +74,10 @@ export function PriceChart({
       <div className="mt-3">
         {geometry ? (
           <svg viewBox={`0 0 ${W} ${H}`} className="h-32 w-full" preserveAspectRatio="none" role="img" aria-label={title}>
-            <path d={geometry.area} fill="#f3f3f3" />
-            <path d={geometry.line} fill="none" stroke="#111111" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-            <circle cx={geometry.lastX} cy={geometry.lastY} r="3.2" fill="#111111" />
-            <circle cx={geometry.lastX} cy={geometry.lastY} r="7" fill="#111111" opacity="0.12" />
+            <path d={geometry.area} fill="var(--color-accent-soft)" />
+            <path d={geometry.line} fill="none" stroke="var(--color-ink)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            <circle cx={geometry.lastX} cy={geometry.lastY} r="3.2" fill="var(--color-accent-strong)" stroke="var(--color-ink)" strokeWidth="1" />
+            <circle cx={geometry.lastX} cy={geometry.lastY} r="8" fill="var(--color-accent)" opacity="0.5" />
           </svg>
         ) : (
           <div className="flex h-32 items-center justify-center rounded-2xl bg-soft text-xs text-mute">·</div>

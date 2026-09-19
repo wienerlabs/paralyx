@@ -5,6 +5,6 @@ export function PoolStatusBadge({ status, className = '' }: { status: number | n
   const { t } = useT()
   if (status === null) return null
   const key = poolStatusKey(status)
-  const tone = key === 'poolStatusActive' ? 'bg-ink text-white border-ink' : 'bg-white text-ink border-ink'
+  const tone = key === 'poolStatusActive' ? 'bg-accent text-on-accent border-accent' : 'bg-surface text-ink border-ink'
   return <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs ${tone} ${className}`}>{t(key)}</span>
 }

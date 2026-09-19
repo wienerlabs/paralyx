@@ -14,12 +14,12 @@ export function Steps({ steps }: { steps: Step[] }) {
             className={
               'mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ' +
               (step.state === 'done'
-                ? 'border-ink bg-ink text-white'
+                ? 'border-accent bg-accent text-on-accent'
                 : step.state === 'failed'
-                  ? 'border-ink bg-white text-ink'
+                  ? 'border-ink bg-surface text-ink'
                   : step.state === 'active'
-                    ? 'animate-pulse border-ink bg-white text-ink'
-                    : 'border-line bg-white text-mute')
+                    ? 'animate-pulse border-accent-strong bg-accent-soft text-ink'
+                    : 'border-line bg-surface text-mute')
             }
           >
             {step.state === 'done' ? '✓' : step.state === 'failed' ? '!' : index + 1}

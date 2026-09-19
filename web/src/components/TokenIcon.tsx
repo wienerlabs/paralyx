@@ -21,7 +21,7 @@ export const tokenNames: Record<TokenSymbol, string> = {
 export function TokenIcon({ symbol, size = 24, className = '' }: { symbol: TokenSymbol; size?: number; className?: string }) {
   return (
     <span
-      className={'inline-flex shrink-0 overflow-hidden rounded-full border border-line bg-white ' + className}
+      className={'inline-flex shrink-0 overflow-hidden rounded-full border border-line bg-surface ' + className}
       style={{ width: size, height: size }}
     >
       <img

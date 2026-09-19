@@ -1,16 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowUpRight, Building2, ShieldCheck } from 'lucide-react'
-import { lookupDirectory, type DirectoryEntry } from '../lib/directory'
-import { Memo } from '@stellar/stellar-sdk'
+import { ArrowUpRight, Banknote, Building2, ShieldCheck } from 'lucide-react'
+import { Asset, Memo } from '@stellar/stellar-sdk'
 import { USDT0_TRANSFER_URL } from '../config'
-import { checkDestination, convertUsdt0ToUsdc, ensureTrustlines, formatAmount, quoteStrictSend, repayLine, sendToExchange, toStroops, blendUsdcAsset, usdt0Asset, type DestinationCheck } from '../lib/chain'
-import { Asset } from '@stellar/stellar-sdk'
+import { blendUsdcAsset, checkDestination, convertUsdt0ToUsdc, ensureTrustlines, formatAmount, quoteStrictSend, repayLine, sendToExchange, toStroops, usdt0Asset, type DestinationCheck } from '../lib/chain'
+import { lookupDirectory, type DirectoryEntry } from '../lib/directory'
+import { addHistory } from '../lib/history'
 import { useT } from '../lib/i18n'
 import { txLink, useFlow, type Shared } from '../lib/shared'
 import { MotionButton } from './MotionButton'
 import { Steps } from './Steps'
 import { TokenIcon } from './TokenIcon'
+import { AmountField, Blocker, CopyButton, Details, ModeSwitch, QuoteBar, Receipt, type ReceiptRow } from './exchange/primitives'
+
+type Mode = 'exchange' | 'usdt0' | 'usdc'
+
+interface ReceiptData {
+  title: string
+  rows: ReceiptRow[]
+  links: { label: string; href: string }[]
+  note?: string
+}
 
 interface ExchangePreset {
   id: string
@@ -42,6 +52,33 @@ function ExchangeLogo({ preset, size = 22 }: { preset: ExchangePreset | null; si
   return <img src={preset.logo} alt="" className="rounded-full object-cover" style={{ width: size, height: size }} draggable={false} />
 }
 
+function useQuote(loader: (value: number) => Promise<number | null>) {
+  const [quote, setQuote] = useState<{ value: number; at: number } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const requestId = useRef(0)
+  const fetch = useCallback(
+    async (value: number) => {
+      if (value <= 0) {
+        setQuote(null)
+        return
+      }
+      requestId.current += 1
+      const id = requestId.current
+      setLoading(true)
+      try {
+        const result = await loader(value)
+        if (id === requestId.current) setQuote(result === null ? null : { value: result, at: Date.now() })
+      } catch {
+        if (id === requestId.current) setQuote(null)
+      } finally {
+        if (id === requestId.current) setLoading(false)
+      }
+    },
+    [loader],
+  )
+  return { quote, loading, fetch, reset: () => setQuote(null) }
+}
+
 function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   const { t } = useT()
   const [exchangeId, setExchangeId] = useState<string>('paribu')
@@ -49,13 +86,15 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   const [memoType, setMemoType] = useState<'id' | 'text'>('id')
   const [memoValue, setMemoValue] = useState('')
   const [amount, setAmount] = useState('10')
-  const [xlmQuote, setXlmQuote] = useState<number | null>(null)
   const [check, setCheck] = useState<DestinationState | null>(null)
   const [checking, setChecking] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null)
   const flow = useFlow()
+  const quoteLoader = useCallback((value: number) => quoteStrictSend(blendUsdcAsset, value.toFixed(7), Asset.native()), [])
+  const xlm = useQuote(quoteLoader)
   const preset = exchanges.find((entry) => entry.id === exchangeId) ?? null
-  const numeric = Number(amount.replace(',', '.')) || 0
+  const numeric = Number(amount) || 0
   const available = wallet?.blendUsdc ?? 0
   const trimmed = destination.trim()
   const validAddress = /^G[A-Z2-7]{55}$/.test(trimmed)
@@ -68,30 +107,19 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   const memoRequired = exists && ((current?.horizon.memoRequired ?? false) || (directory?.tags.includes('memo-required') ?? false))
   const memoBytes = new TextEncoder().encode(memoValue.trim()).length
   const validMemo = memoType === 'id' ? /^\d+$/.test(memoValue.trim()) : memoValue.trim().length > 0 && memoBytes <= 28
-  const minXlm = xlmQuote !== null ? xlmQuote * 0.99 : null
-  const valid = Boolean(signer) && numeric > 0 && numeric <= available && validAddress && verified && validMemo && minXlm !== null && confirmed
+  const minXlm = xlm.quote ? xlm.quote.value * 0.99 : null
   const presetFilled = Boolean(preset?.deposit && trimmed === preset.deposit)
 
   useEffect(() => {
-    if (numeric <= 0) return
-    const handle = setTimeout(() => {
-      quoteStrictSend(blendUsdcAsset, numeric.toFixed(7), Asset.native())
-        .then(setXlmQuote)
-        .catch(() => setXlmQuote(null))
-    }, 400)
+    const handle = setTimeout(() => void xlm.fetch(numeric), 400)
     return () => clearTimeout(handle)
-  }, [numeric])
+  }, [numeric, xlm.fetch])
 
   useEffect(() => {
     setConfirmed(false)
   }, [trimmed, exchangeId])
 
-  useEffect(() => {
-    const initial = exchanges[0].deposit
-    if (initial) void verify(initial)
-  }, [])
-
-  const verify = async (address: string) => {
+  const verify = useCallback(async (address: string) => {
     if (!/^G[A-Z2-7]{55}$/.test(address)) return
     setChecking(true)
     try {
@@ -100,10 +128,21 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
     } finally {
       setChecking(false)
     }
+  }, [])
+
+  useEffect(() => {
+    const initial = exchanges[0].deposit
+    if (initial) void verify(initial)
+  }, [verify])
+
+  const onMemoChange = (value: string) => {
+    setMemoValue(value)
+    if (memoType === 'text' && /^\d{1,19}$/.test(value.trim()) && value.trim().length > 0) setMemoType('id')
   }
 
   const choose = (entry: ExchangePreset | null) => {
     setExchangeId(entry?.id ?? 'other')
+    setReceipt(null)
     if (entry?.deposit) {
       setDestination(entry.deposit)
       void verify(entry.deposit)
@@ -113,10 +152,21 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
     }
   }
 
+  const amountError = numeric > 0 && numeric > available ? t('reasonBalance') : null
+  const reasons: string[] = []
+  if (!signer) reasons.push(t('reasonWallet'))
+  if (numeric <= 0) reasons.push(t('reasonAmount'))
+  if (!validAddress || !verified) reasons.push(t('reasonAddress'))
+  if (!validMemo) reasons.push(t('reasonMemo'))
+  if (numeric > 0 && !amountError && minXlm === null) reasons.push(t('reasonQuote'))
+  if (verified && validMemo && !confirmed) reasons.push(t('reasonConfirm'))
+  const valid = reasons.length === 0 && !amountError && !flow.busy
+
   const submit = () =>
     flow.run(['verifying', 'signing', 'sending', 'done'], async (mark) => {
       if (!signer) throw new Error(t('needWallet'))
-      if (minXlm === null) throw new Error('quote missing')
+      if (minXlm === null) throw new Error(t('reasonQuote'))
+      setReceipt(null)
       mark(0, 'active')
       const fresh = await checkDestination(trimmed)
       if (!fresh.exists) throw new Error(t('destinationMissing'))
@@ -128,6 +178,19 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
       mark(2, 'done', txLink(hash))
       mark(3, 'done')
       setConfirmed(false)
+      const links = [{ label: t('view'), href: txLink(hash) }, ...(preset ? [{ label: t('sellAtExchange'), href: preset.url }] : [])]
+      setReceipt({
+        title: t('receiptExchange'),
+        rows: [
+          { label: t('sentUsdc'), value: `${formatAmount(numeric)} USDC` },
+          { label: t('minReceived'), value: `${formatAmount(minXlm, 2)} XLM` },
+          { label: t('toExchange'), value: `${preset?.name ?? t('exchangeOther')} · ${trimmed.slice(0, 6)}…${trimmed.slice(-6)}`, copy: trimmed },
+          { label: t('exchangeMemo'), value: `${memoType} · ${memoValue.trim()}`, copy: memoValue.trim() },
+        ],
+        links,
+        note: t('exchangeSteps'),
+      })
+      addHistory(signer.address, { kind: 'exchange', title: `${t('receiptExchange')} · ${preset?.name ?? t('exchangeOther')}`, amount: `${formatAmount(numeric)} USDC`, detail: `≥ ${formatAmount(minXlm, 2)} XLM`, links })
       await refresh()
     })
 
@@ -143,17 +206,9 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
       : ''
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg text-ink">
-          <TokenIcon symbol="TRY" size={22} />
-          {t('exchangeCashTitle')}
-        </h3>
-        <span className="pill">Mainnet</span>
-      </div>
-      <p className="mt-1 text-sm text-mute">{t('exchangeCashBody')}</p>
-
-      <div className="mt-4">
+    <div className="space-y-4">
+      <p className="text-sm text-mute">{t('exchangeCashBody')}</p>
+      <div>
         <label className="label">{t('exchangePickTitle')}</label>
         <div className="flex flex-wrap gap-2">
           {exchanges.map((entry) => (
@@ -165,7 +220,7 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
               onClick={() => choose(entry)}
               className={
                 'inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition ' +
-                (exchangeId === entry.id ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink hover:border-ink')
+                (exchangeId === entry.id ? 'border-accent bg-accent text-on-accent' : 'border-line bg-surface text-ink hover:border-accent-strong')
               }
             >
               <ExchangeLogo preset={entry} />
@@ -178,7 +233,7 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
             onClick={() => choose(null)}
             className={
               'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ' +
-              (exchangeId === 'other' ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink hover:border-ink')
+              (exchangeId === 'other' ? 'border-accent bg-accent text-on-accent' : 'border-line bg-surface text-ink hover:border-accent-strong')
             }
           >
             <Building2 className="h-4 w-4" /> {t('exchangeOther')}
@@ -186,7 +241,7 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
         </div>
         {preset ? (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-mute">
-            <a className="inline-flex items-center gap-1 underline" href={preset.url} target="_blank" rel="noreferrer">
+            <a className="inline-flex items-center gap-1 underline hover:text-ink" href={preset.url} target="_blank" rel="noreferrer">
               <ExchangeLogo preset={preset} size={14} /> {t('openExchange')} <ArrowUpRight className="h-3 w-3" />
             </a>
             <span>{t('memoFromExchange')}</span>
@@ -194,55 +249,63 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
         ) : null}
       </div>
 
-      <div className="mt-4 grid gap-3">
-        <div>
-          <label className="label">{t('exchangeAddress')}</label>
-          <div className="flex gap-2">
-            <input className="input font-mono text-sm" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="G…" spellCheck={false} />
-            <MotionButton variant="ghost" className="shrink-0" disabled={!validAddress || checking || isSelf} onClick={() => void verify(trimmed)}>
-              <ShieldCheck className="h-4 w-4" /> {checking ? t('verifying') : t('verifyDestination')}
-            </MotionButton>
-          </div>
-          <div className={'mt-1 text-xs ' + (mismatch || (current && !current.horizon.exists) ? 'text-ink' : 'text-mute')}>
-            {presetFilled && verified ? `${t('presetFilled')} ` : ''}
-            {statusLine}
-          </div>
+      <div>
+        <label className="label">{t('exchangeAddress')}</label>
+        <div className="flex gap-2">
+          <input className="input font-mono text-sm" value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="G…" spellCheck={false} />
+          <MotionButton variant="ghost" className="shrink-0" disabled={!validAddress || checking || isSelf} onClick={() => void verify(trimmed)}>
+            <ShieldCheck className="h-4 w-4" /> {checking ? t('verifying') : t('verifyDestination')}
+          </MotionButton>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label className="label">{t('exchangeMemo')}</label>
-            <select className="input" value={memoType} onChange={(e) => setMemoType(e.target.value as 'id' | 'text')}>
-              <option value="id">{t('memoId')}</option>
-              <option value="text">{t('memoText')}</option>
-            </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label">{t('exchangeMemo')}</label>
-            <input className="input font-mono text-sm" value={memoValue} onChange={(e) => setMemoValue(e.target.value)} spellCheck={false} />
-            <div className="mt-1 text-xs text-mute">{memoRequired ? t('destinationMemoRequired') : t('memoTypeHint')}</div>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label flex items-center gap-2">
-              <TokenIcon symbol="USDC" size={16} /> {t('amountUsdc')}
-            </label>
-            <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <div className="mt-1 text-xs text-mute">
-              {t('available')}: {formatAmount(available)} USDC
-            </div>
-          </div>
-          <div>
-            <label className="label flex items-center gap-2">
-              <TokenIcon symbol="XLM" size={16} /> {t('youGetXlm')}
-            </label>
-            <div className="input bg-soft">{xlmQuote !== null ? `${formatAmount(xlmQuote, 2)} XLM` : '·'}</div>
-            <div className="mt-1 text-xs text-mute">{rate ? `≈ ₺${formatAmount(numeric * rate)}` : ''}</div>
-          </div>
+        <div className={'mt-1 text-xs ' + (mismatch || (current && !current.horizon.exists) ? 'text-ink' : 'text-mute')}>
+          {presetFilled && verified ? `${t('presetFilled')} ` : ''}
+          {statusLine}
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl bg-soft p-4 text-sm">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className="label">{t('exchangeMemo')}</label>
+          <select className="input" value={memoType} onChange={(event) => setMemoType(event.target.value as 'id' | 'text')}>
+            <option value="id">{t('memoId')}</option>
+            <option value="text">{t('memoText')}</option>
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label">{t('exchangeMemo')}</label>
+          <input className="input font-mono text-sm" value={memoValue} onChange={(event) => onMemoChange(event.target.value)} spellCheck={false} placeholder={memoType === 'id' ? '123456789' : 'memo'} />
+          <div className="mt-1 text-xs text-mute">{memoRequired ? t('destinationMemoRequired') : t('memoTypeHint')}</div>
+        </div>
+      </div>
+
+      <AmountField symbol="USDC" label={t('amountUsdc')} value={amount} onChange={setAmount} balance={available} max={available} presets error={amountError} disabled={flow.busy} />
+
+      <div className="flex items-center justify-between rounded-2xl border border-line px-4 py-3">
+        <span className="text-sm text-mute">{t('youGetXlm')}</span>
+        <span className="inline-flex items-center gap-2 text-xl tracking-tight text-ink">
+          <TokenIcon symbol="XLM" size={20} />
+          {xlm.quote ? `${formatAmount(xlm.quote.value, 2)} XLM` : '·'}
+        </span>
+      </div>
+      <QuoteBar
+        primary={xlm.quote && numeric > 0 ? `1 USDC = ${formatAmount(xlm.quote.value / numeric, 4)} XLM` : '·'}
+        secondary={rate ? `≈ ₺${formatAmount(numeric * rate)}` : undefined}
+        updatedAt={xlm.quote?.at ?? null}
+        loading={xlm.loading}
+        onRefresh={() => void xlm.fetch(numeric)}
+        source={t('quoteDex')}
+      />
+      <Details
+        title={t('details')}
+        rows={[
+          { label: t('minReceived'), value: minXlm !== null ? `${formatAmount(minXlm, 2)} XLM` : '·', icon: <TokenIcon symbol="XLM" size={14} /> },
+          { label: t('slippage'), value: '1%' },
+          { label: t('networkFee'), value: t('networkFeeValue') },
+          { label: t('arrival'), value: t('arrivalDex') },
+        ]}
+      />
+
+      <div className="rounded-2xl bg-soft p-4 text-sm">
         <div className="text-xs text-mute">{t('summaryTitle')}</div>
         <div className="mt-2 flex justify-between">
           <span className="text-mute">{t('summarySend')}</span>
@@ -262,22 +325,35 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
             <ExchangeLogo preset={preset} size={16} />
             {preset ? preset.name : t('exchangeOther')} · {shortAddress}
             {validMemo ? ` · memo ${memoType} ${memoValue.trim()}` : ''}
+            {validAddress ? <CopyButton text={trimmed} /> : null}
           </span>
         </div>
       </div>
 
-      <label className={'mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-line px-4 py-3 text-sm ' + (verified ? '' : 'opacity-50')}>
-        <input type="checkbox" className="mt-0.5 accent-black" checked={confirmed} disabled={!verified} onChange={(e) => setConfirmed(e.target.checked)} />
+      <label className={'flex cursor-pointer items-start gap-3 rounded-2xl border border-line px-4 py-3 text-sm ' + (verified ? '' : 'opacity-50')}>
+        <input type="checkbox" className="mt-0.5 accent-accent-strong" checked={confirmed} disabled={!verified} onChange={(event) => setConfirmed(event.target.checked)} />
         <span>{t('confirmDestination')}</span>
       </label>
 
-      <MotionButton full className="mt-4 py-3" disabled={!valid || flow.busy} onClick={() => void submit()}>
+      <MotionButton full className="py-3 text-base" disabled={!valid} onClick={() => void submit()}>
         <ArrowUpRight className="h-4 w-4" /> {t('sendToExchange')}
       </MotionButton>
-      {memoRequired && !validMemo ? <p className="mt-2 text-xs text-ink">{t('destinationMemoRequired')}</p> : null}
-      <p className="mt-2 text-xs text-mute">{t('exchangeSteps')}</p>
+      <Blocker reasons={reasons} />
       <Steps steps={flow.steps} />
-      {flow.error ? <p className="mt-3 break-all text-sm text-ink">{flow.error}</p> : null}
+      {receipt ? (
+        <Receipt
+          title={receipt.title}
+          rows={receipt.rows}
+          links={receipt.links}
+          note={receipt.note}
+          resetLabel={t('newTransaction')}
+          onReset={() => {
+            setReceipt(null)
+            flow.reset()
+          }}
+        />
+      ) : null}
+      {flow.error ? <p className="break-all text-sm text-ink">{flow.error}</p> : null}
     </div>
   )
 }
@@ -285,26 +361,34 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
 function Usdt0Repay({ signer, wallet, line, health, refresh }: Shared) {
   const { t } = useT()
   const [amount, setAmount] = useState('')
-  const [quote, setQuote] = useState<number | null>(null)
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null)
   const flow = useFlow()
   const balance = wallet?.usdt0 ?? null
   const debt = health?.debtUsdc ?? 0
-  const numeric = Number(amount.replace(',', '.')) || 0
+  const numeric = Number(amount) || 0
+  const quoteLoader = useCallback((value: number) => (usdt0Asset ? quoteStrictSend(usdt0Asset, value.toFixed(7), blendUsdcAsset) : Promise.resolve(null)), [])
+  const usdc = useQuote(quoteLoader)
+  const suggested = balance !== null && debt > 0 ? Math.min(balance, debt * 1.01) : 0
 
   useEffect(() => {
-    if (balance !== null && amount === '' && debt > 0) setAmount(Math.min(balance, debt * 1.01).toFixed(2))
-  }, [balance, debt, amount])
+    if (balance !== null && amount === '' && suggested > 0) setAmount(suggested.toFixed(2))
+  }, [balance, suggested, amount])
 
   useEffect(() => {
-    const asset = usdt0Asset
-    if (numeric <= 0 || !asset) return
-    const handle = setTimeout(() => {
-      quoteStrictSend(asset, numeric.toFixed(7), blendUsdcAsset)
-        .then(setQuote)
-        .catch(() => setQuote(null))
-    }, 400)
+    const handle = setTimeout(() => void usdc.fetch(numeric), 400)
     return () => clearTimeout(handle)
-  }, [numeric])
+  }, [numeric, usdc.fetch])
+
+  const minUsdc = usdc.quote ? usdc.quote.value * 0.99 : null
+  const amountError = numeric > 0 && balance !== null && numeric > balance ? t('reasonBalance') : null
+  const reasons: string[] = []
+  if (!signer) reasons.push(t('reasonWallet'))
+  else if (!line) reasons.push(t('reasonLine'))
+  if (debt <= 0) reasons.push(t('reasonDebt'))
+  if (balance === null) reasons.push(t('reasonTrust'))
+  if (numeric <= 0) reasons.push(t('reasonAmount'))
+  if (numeric > 0 && !amountError && minUsdc === null) reasons.push(t('reasonQuote'))
+  const valid = reasons.length === 0 && !amountError && !flow.busy
 
   const trust = () =>
     flow.run(['signing', 'done'], async (mark) => {
@@ -319,10 +403,9 @@ function Usdt0Repay({ signer, wallet, line, health, refresh }: Shared) {
   const submit = () =>
     flow.run(['converting', 'sending', 'done'], async (mark) => {
       if (!signer || !health) throw new Error(t('needWallet'))
-      if (!line) throw new Error(t('needLine'))
-      if (quote === null) throw new Error('quote missing')
+      if (minUsdc === null) throw new Error(t('reasonQuote'))
+      setReceipt(null)
       mark(0, 'active')
-      const minUsdc = quote * 0.99
       const convertHash = await convertUsdt0ToUsdc(signer, numeric.toFixed(7), minUsdc.toFixed(7))
       mark(0, 'done', txLink(convertHash))
       mark(1, 'active')
@@ -331,31 +414,30 @@ function Usdt0Repay({ signer, wallet, line, health, refresh }: Shared) {
       const hash = await repayLine(signer, toStroops(repayUsdc.toFixed(7)), toStroops(fullRepay ? (health.collateralXlm * 1.002).toFixed(7) : '0'))
       mark(1, 'done', txLink(hash))
       mark(2, 'done')
+      const remaining = Math.max(0, health.debtUsdc - repayUsdc)
+      const links = [{ label: t('view'), href: txLink(hash) }]
+      const rows: ReceiptRow[] = [
+        { label: 'USDT0', value: `${formatAmount(numeric)} USDT0` },
+        { label: t('repaidUsdc'), value: `${formatAmount(repayUsdc)} USDC` },
+        { label: t('remainingDebt'), value: `${formatAmount(remaining)} USDC` },
+      ]
+      if (fullRepay) rows.push({ label: t('collateralBack'), value: `${formatAmount(health.collateralXlm)} XLM` })
+      setReceipt({ title: t('receiptUsdt0'), rows, links })
+      addHistory(signer.address, { kind: 'usdt0', title: t('receiptUsdt0'), amount: `${formatAmount(repayUsdc)} USDC`, detail: `${formatAmount(numeric)} USDT0`, links })
       await refresh()
     })
 
-  const valid = Boolean(signer && line) && balance !== null && numeric > 0 && numeric <= balance && quote !== null && debt > 0
-
   return (
-    <div className="card">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg text-ink">
-          <TokenIcon symbol="USDT0" size={22} />
-          {t('usdt0Title')}
-        </h3>
-        <span className="pill">
-          <TokenIcon symbol="USDT0" size={14} className="mr-1.5" /> LayerZero · USDT0
-        </span>
-      </div>
-      <p className="mt-1 text-sm text-mute">{t('usdt0Body')}</p>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line px-4 py-3 text-sm">
+    <div className="space-y-4">
+      <p className="text-sm text-mute">{t('usdt0Body')}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line px-4 py-3 text-sm">
         <span className="inline-flex items-center gap-2 text-mute">
           <TokenIcon symbol="USDT0" size={20} />
           {t('usdt0Balance')}
         </span>
         <span className="text-ink">{balance === null ? '·' : `${formatAmount(balance)} USDT0`}</span>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2">
         {balance === null && signer ? (
           <MotionButton variant="ghost" disabled={flow.busy} onClick={() => void trust()}>
             <TokenIcon symbol="USDT0" size={18} /> {t('usdt0Trust')}
@@ -365,78 +447,190 @@ function Usdt0Repay({ signer, wallet, line, health, refresh }: Shared) {
           <TokenIcon symbol="USDT0" size={18} /> {t('usdt0Bring')} <ArrowUpRight className="h-4 w-4" />
         </a>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="label flex items-center gap-2">
-            <TokenIcon symbol="USDT0" size={16} /> USDT0
-          </label>
-          <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <div className="mt-1 text-xs text-mute">
-            {t('debt')}: {formatAmount(debt)} USDC
-          </div>
-        </div>
-        <div>
-          <label className="label flex items-center gap-2">
-            <TokenIcon symbol="USDC" size={16} /> {t('minReceive')}
-          </label>
-          <div className="input bg-soft">{quote !== null ? `${formatAmount(quote * 0.99, 4)} USDC` : '·'}</div>
-        </div>
-      </div>
-      <MotionButton full className="mt-4 py-3" disabled={!valid || flow.busy} onClick={() => void submit()}>
+      {balance !== null && balance <= 0 ? <p className="text-xs text-mute">{t('usdt0Missing')}</p> : null}
+      <AmountField
+        symbol="USDT0"
+        label="USDT0"
+        value={amount}
+        onChange={setAmount}
+        balance={balance ?? undefined}
+        max={balance !== null ? Math.min(balance, Math.max(0, debt * 1.01)) : undefined}
+        presets={balance !== null}
+        error={amountError}
+        disabled={flow.busy || balance === null}
+        hint={`${t('debt')}: ${formatAmount(debt)} USDC`}
+      />
+      <QuoteBar
+        primary={usdc.quote && numeric > 0 ? `1 USDT0 = ${formatAmount(usdc.quote.value / numeric, 4)} USDC` : '·'}
+        secondary={minUsdc !== null ? `${t('minReceived')} ${formatAmount(minUsdc, 4)} USDC` : undefined}
+        updatedAt={usdc.quote?.at ?? null}
+        loading={usdc.loading}
+        onRefresh={() => void usdc.fetch(numeric)}
+        source={t('quoteDex')}
+      />
+      <Details
+        title={t('details')}
+        rows={[
+          { label: t('slippage'), value: '1%' },
+          { label: t('networkFee'), value: t('networkFeeValue'), icon: <TokenIcon symbol="XLM" size={14} /> },
+          { label: t('arrival'), value: t('arrivalDex') },
+        ]}
+      />
+      <MotionButton full className="py-3 text-base" disabled={!valid} onClick={() => void submit()}>
         <TokenIcon symbol="USDT0" size={18} /> {t('usdt0Repay')}
       </MotionButton>
+      <Blocker reasons={reasons} />
       <Steps steps={flow.steps} />
-      {flow.error ? <p className="mt-3 break-all text-sm text-ink">{flow.error}</p> : null}
+      {receipt ? (
+        <Receipt
+          title={receipt.title}
+          rows={receipt.rows}
+          links={receipt.links}
+          resetLabel={t('newTransaction')}
+          onReset={() => {
+            setReceipt(null)
+            flow.reset()
+          }}
+        />
+      ) : null}
+      {flow.error ? <p className="break-all text-sm text-ink">{flow.error}</p> : null}
     </div>
   )
 }
 
 function UsdcRepay({ signer, wallet, line, health, refresh }: Shared) {
   const { t } = useT()
+  const [amount, setAmount] = useState('')
+  const [withdrawAll, setWithdrawAll] = useState(true)
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null)
   const flow = useFlow()
   const balance = wallet?.blendUsdc ?? 0
   const debt = health?.debtUsdc ?? 0
-  const repayUsdc = Math.min(balance, debt * 1.001)
-  const valid = Boolean(signer && line) && debt > 0 && balance > 0
+  const numeric = Number(amount) || 0
+  const maxRepay = Math.min(balance, debt * 1.001)
+
+  useEffect(() => {
+    if (amount === '' && maxRepay > 0) setAmount(maxRepay.toFixed(2))
+  }, [maxRepay, amount])
+
+  const amountError = numeric > 0 && numeric > balance ? t('reasonBalance') : null
+  const reasons: string[] = []
+  if (!signer) reasons.push(t('reasonWallet'))
+  else if (!line) reasons.push(t('reasonLine'))
+  if (debt <= 0) reasons.push(t('reasonDebt'))
+  if (numeric <= 0) reasons.push(t('reasonAmount'))
+  const valid = reasons.length === 0 && !amountError && !flow.busy
+  const fullRepay = numeric >= debt
+
   const submit = () =>
     flow.run(['signing', 'sending', 'done'], async (mark) => {
       if (!signer || !health) throw new Error(t('needWallet'))
+      setReceipt(null)
       mark(0, 'active')
-      const fullRepay = balance >= debt
-      const hash = await repayLine(signer, toStroops(repayUsdc.toFixed(7)), toStroops(fullRepay ? (health.collateralXlm * 1.002).toFixed(7) : '0'))
+      const repayUsdc = Math.min(numeric, health.debtUsdc * 1.001)
+      const hash = await repayLine(signer, toStroops(repayUsdc.toFixed(7)), toStroops(fullRepay && withdrawAll ? (health.collateralXlm * 1.002).toFixed(7) : '0'))
       mark(0, 'done')
       mark(1, 'done', txLink(hash))
       mark(2, 'done')
+      const remaining = Math.max(0, health.debtUsdc - repayUsdc)
+      const links = [{ label: t('view'), href: txLink(hash) }]
+      const rows: ReceiptRow[] = [
+        { label: t('repaidUsdc'), value: `${formatAmount(repayUsdc)} USDC` },
+        { label: t('remainingDebt'), value: `${formatAmount(remaining)} USDC` },
+      ]
+      if (fullRepay && withdrawAll) rows.push({ label: t('collateralBack'), value: `${formatAmount(health.collateralXlm)} XLM` })
+      setReceipt({ title: t('receiptUsdc'), rows, links })
+      addHistory(signer.address, { kind: 'usdc', title: t('receiptUsdc'), amount: `${formatAmount(repayUsdc)} USDC`, links })
       await refresh()
     })
+
   return (
-    <div className="card">
-      <h3 className="flex items-center gap-2 text-lg text-ink">
-        <TokenIcon symbol="USDC" size={22} />
-        {t('usdcRepayTitle')}
-      </h3>
-      <p className="mt-1 text-sm text-mute">{t('usdcRepayBody')}</p>
-      <div className="mt-4 flex items-center justify-between rounded-2xl border border-line px-4 py-3 text-sm">
-        <span className="text-mute">{t('debt')}</span>
+    <div className="space-y-4">
+      <p className="text-sm text-mute">{t('usdcRepayBody')}</p>
+      <div className="flex items-center justify-between rounded-2xl border border-line px-4 py-3 text-sm">
+        <span className="inline-flex items-center gap-2 text-mute">
+          <TokenIcon symbol="USDC" size={20} /> {t('debt')}
+        </span>
         <span className="text-ink">{formatAmount(debt)} USDC</span>
       </div>
-      <MotionButton full className="mt-4 py-3" disabled={!valid || flow.busy} onClick={() => void submit()}>
-        {t('repayNow')} · {formatAmount(repayUsdc)} USDC
+      <AmountField
+        symbol="USDC"
+        label={t('amountUsdc')}
+        value={amount}
+        onChange={setAmount}
+        balance={balance}
+        max={maxRepay}
+        presets
+        error={amountError}
+        disabled={flow.busy}
+        extra={
+          maxRepay > 0 ? (
+            <button type="button" className="chip" onClick={() => setAmount(maxRepay.toFixed(2))}>
+              {t('closeDebt')} · {formatAmount(maxRepay)} USDC
+            </button>
+          ) : null
+        }
+      />
+      <div className="flex items-center justify-between rounded-2xl bg-soft px-4 py-3 text-sm">
+        <span className="text-mute">{t('remainingDebt')}</span>
+        <span className="text-ink">{formatAmount(Math.max(0, debt - numeric))} USDC</span>
+      </div>
+      <label className={'flex cursor-pointer items-center gap-2 rounded-2xl border border-line px-4 py-3 text-sm ' + (fullRepay ? '' : 'opacity-50')}>
+        <input type="checkbox" checked={withdrawAll} disabled={!fullRepay} onChange={(event) => setWithdrawAll(event.target.checked)} className="accent-accent-strong" />
+        {t('withdrawAllShort')}
+      </label>
+      <MotionButton full className="py-3 text-base" disabled={!valid} onClick={() => void submit()}>
+        <Banknote className="h-4 w-4" /> {t('repayNow')}
       </MotionButton>
+      <Blocker reasons={reasons} />
       <Steps steps={flow.steps} />
-      {flow.error ? <p className="mt-3 break-all text-sm text-ink">{flow.error}</p> : null}
+      {receipt ? (
+        <Receipt
+          title={receipt.title}
+          rows={receipt.rows}
+          links={receipt.links}
+          resetLabel={t('newTransaction')}
+          onReset={() => {
+            setReceipt(null)
+            flow.reset()
+          }}
+        />
+      ) : null}
+      {flow.error ? <p className="break-all text-sm text-ink">{flow.error}</p> : null}
     </div>
   )
 }
 
 export function MainnetExchange(shared: Shared) {
   const { t } = useT()
+  const [mode, setMode] = useState<Mode>('exchange')
   return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-line bg-soft px-4 py-3 text-xs text-mute">{t('mainnetWarning')}</div>
-      <ExchangeCashOut {...shared} />
-      <Usdt0Repay {...shared} />
-      <UsdcRepay {...shared} />
+    <div className="card">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-lg text-ink">
+          <TokenIcon symbol="TRY" size={22} />
+          {t('exchange')}
+        </h3>
+        <span className="pill">Mainnet</span>
+      </div>
+      <div className="mt-4">
+        <ModeSwitch
+          name="mainnet-exchange"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { id: 'exchange', label: t('modeExchange'), icon: <Building2 className="h-4 w-4" /> },
+            { id: 'usdt0', label: t('modeUsdt0'), icon: <TokenIcon symbol="USDT0" size={16} /> },
+            { id: 'usdc', label: t('modeUsdc'), icon: <TokenIcon symbol="USDC" size={16} /> },
+          ]}
+        />
+      </div>
+      <div className="mt-3 rounded-2xl border border-line bg-soft px-4 py-2.5 text-xs text-mute">{t('mainnetWarning')}</div>
+      <div className="mt-4">
+        {mode === 'exchange' ? <ExchangeCashOut {...shared} /> : null}
+        {mode === 'usdt0' ? <Usdt0Repay {...shared} /> : null}
+        {mode === 'usdc' ? <UsdcRepay {...shared} /> : null}
+      </div>
     </div>
   )
 }

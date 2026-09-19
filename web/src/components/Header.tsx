@@ -40,7 +40,7 @@ export function WalletMenu() {
   return (
     <div className="relative" ref={ref}>
       <MotionButton variant="ghost" onClick={() => setOpen((value) => !value)} title={address}>
-        <span className="inline-block h-2 w-2 rounded-full bg-ink" />
+        <span className="inline-block h-2 w-2 rounded-full bg-accent-strong ring-1 ring-line" />
         {shortAddress(address)}
       </MotionButton>
       <AnimatePresence>
@@ -50,7 +50,7 @@ export function WalletMenu() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-            className="absolute right-0 z-40 mt-2 w-72 rounded-3xl border border-line bg-white p-4 shadow-lg"
+            className="absolute right-0 z-40 mt-2 w-72 rounded-3xl border border-line bg-surface p-4 shadow-lg"
           >
             <div className="text-xs text-mute">{walletName ?? t('wallets')} · Stellar testnet</div>
             <div className="mt-1 break-all text-sm text-ink">{address}</div>

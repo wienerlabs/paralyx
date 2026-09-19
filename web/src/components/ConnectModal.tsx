@@ -24,14 +24,14 @@ export function ConnectModal() {
     <AnimatePresence>
       {connectOpen ? (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/20 p-4 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 backdrop-blur-sm sm:items-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={closeConnect}
         >
           <motion.div
-            className="flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-line bg-white p-6 shadow-xl"
+            className="flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-line bg-surface p-6 shadow-xl"
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -48,7 +48,7 @@ export function ConnectModal() {
                   <p className="mt-1 text-sm text-mute">{t('connectBody')}</p>
                 </div>
               </div>
-              <button type="button" onClick={closeConnect} className="rounded-full border border-line p-2 text-mute transition hover:border-ink hover:text-ink" aria-label={t('close')}>
+              <button type="button" onClick={closeConnect} className="rounded-full border border-line p-2 text-mute transition hover:border-accent-strong hover:text-ink" aria-label={t('close')}>
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -70,7 +70,7 @@ export function ConnectModal() {
                       if (wallet.isAvailable) void connect(wallet)
                       else window.open(wallet.url, '_blank', 'noreferrer')
                     }}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3 text-left transition hover:border-ink disabled:opacity-50"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-left transition hover:border-accent-strong hover:bg-accent-soft disabled:opacity-50"
                   >
                     <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-white">
                       {wallet.icon ? <img src={wallet.icon} alt="" className="h-6 w-6 object-contain" /> : null}

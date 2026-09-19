@@ -1,144 +1,99 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRightLeft, ChevronDown, RefreshCw } from 'lucide-react'
-import { ANCHOR_MAX_TRY, ANCHOR_MAX_USDC } from '../config'
-import {
-  authenticate,
-  quoteTryToUsdc,
-  quoteUsdcToTry,
-  simulateBankTransfer,
-  startDeposit,
-  startWithdraw,
-  waitForStatus,
-  type Quote,
-} from '../lib/anchor'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDownToLine, Banknote } from 'lucide-react'
+import { ANCHOR_HOME_DOMAIN, ANCHOR_MAX_TRY, ANCHOR_MAX_USDC } from '../config'
+import { authenticate, quoteTryToUsdc, quoteUsdcToTry, simulateBankTransfer, startDeposit, startWithdraw, waitForStatus, type Quote } from '../lib/anchor'
 import { convertCircleToBlendUsdc, formatAmount, payAnchorWithBlendUsdc, recordPayout, repayLine, toStroops } from '../lib/chain'
+import { addHistory } from '../lib/history'
 import { useT } from '../lib/i18n'
 import { txLink, useFlow, type Shared } from '../lib/shared'
 import { MotionButton } from './MotionButton'
 import { Steps } from './Steps'
-import { TokenIcon, tokenNames, type TokenSymbol } from './TokenIcon'
+import { TokenIcon } from './TokenIcon'
+import { AmountField, Blocker, Details, ModeSwitch, QuoteBar, Receipt, type ReceiptRow } from './exchange/primitives'
 
-type Currency = Extract<TokenSymbol, 'USDC' | 'TRY'>
-const currencies: Currency[] = ['USDC', 'TRY']
+type Mode = 'cashout' | 'repay'
 
-function money(value: number, currency: Currency, decimals = 2): string {
-  return currency === 'TRY' ? `₺${formatAmount(value, decimals)}` : `${formatAmount(value, decimals)} USDC`
+interface ReceiptData {
+  title: string
+  rows: ReceiptRow[]
+  links: { label: string; href: string }[]
 }
 
-function CurrencySelector({ value, onChange, disabled }: { value: Currency; onChange: (currency: Currency) => void; disabled?: boolean }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="relative">
-      <motion.button
-        type="button"
-        whileTap={{ scale: 0.97 }}
-        disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
-        className="flex items-center gap-2 rounded-full border border-line bg-white py-1.5 pl-1.5 pr-3 text-base text-ink transition hover:border-ink disabled:opacity-60"
-      >
-        <TokenIcon symbol={value} size={26} />
-        <span>{value === 'TRY' ? '₺ TRY' : 'USDC'}</span>
-        <ChevronDown className="h-4 w-4 text-mute" />
-      </motion.button>
-      <AnimatePresence>
-        {open ? (
-          <motion.ul
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            className="absolute left-0 z-30 mt-2 w-56 rounded-2xl border border-line bg-white p-1 shadow-lg"
-          >
-            {currencies.map((currency) => (
-              <li key={currency}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange(currency)
-                    setOpen(false)
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-ink transition hover:bg-soft"
-                >
-                  <TokenIcon symbol={currency} size={22} />
-                  <span>
-                    {currency === 'TRY' ? '₺ TRY' : 'USDC'} <span className="text-mute">· {tokenNames[currency]}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </motion.ul>
-        ) : null}
-      </AnimatePresence>
-    </div>
-  )
-}
+const MIN_USDC = 0.5
+const MIN_TRY = 50
 
 export function ExchangeCard({ signer, wallet, line, health, rate, refresh }: Shared) {
   const { t } = useT()
-  const [from, setFrom] = useState<Currency>('USDC')
+  const [mode, setMode] = useState<Mode>('cashout')
   const [amount, setAmount] = useState('10')
-  const [quote, setQuote] = useState<Quote | null>(null)
+  const [quote, setQuote] = useState<{ value: Quote; at: number } | null>(null)
+  const [quoting, setQuoting] = useState(false)
   const [withdrawAll, setWithdrawAll] = useState(true)
-  const [spin, setSpin] = useState(0)
-  const [result, setResult] = useState<string | null>(null)
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null)
   const flow = useFlow()
-  const to: Currency = from === 'USDC' ? 'TRY' : 'USDC'
-  const cashOut = from === 'USDC'
-  const numeric = Number(amount.replace(',', '.')) || 0
+  const requestId = useRef(0)
+  const cashOut = mode === 'cashout'
+  const numeric = Number(amount) || 0
   const available = wallet?.blendUsdc ?? 0
   const debt = health?.debtUsdc ?? 0
+  const maxCashOut = Math.max(0, Math.min(available, ANCHOR_MAX_USDC))
+  const suggestedRepay = rate && debt > 0 ? Math.min(ANCHOR_MAX_TRY, Math.ceil(debt * 1.01 * rate)) : 0
 
-  useEffect(() => {
-    if (numeric <= 0) {
+  const fetchQuote = useCallback(async (value: number, direction: Mode) => {
+    if (value <= 0) {
       setQuote(null)
       return
     }
-    const handle = setTimeout(() => {
-      const request = cashOut ? quoteUsdcToTry(numeric) : quoteTryToUsdc(numeric)
-      request.then(setQuote).catch(() => setQuote(null))
-    }, 350)
-    return () => clearTimeout(handle)
-  }, [numeric, cashOut])
+    requestId.current += 1
+    const id = requestId.current
+    setQuoting(true)
+    try {
+      const result = direction === 'cashout' ? await quoteUsdcToTry(value) : await quoteTryToUsdc(value)
+      if (id === requestId.current) setQuote({ value: result, at: Date.now() })
+    } catch {
+      if (id === requestId.current) setQuote(null)
+    } finally {
+      if (id === requestId.current) setQuoting(false)
+    }
+  }, [])
 
   useEffect(() => {
-    if (!cashOut && rate && debt > 0) {
-      setAmount(String(Math.min(ANCHOR_MAX_TRY, Math.ceil(debt * 1.01 * rate))))
-    }
-    if (cashOut) {
-      setAmount(available > 0 ? String(Math.min(available, ANCHOR_MAX_USDC, Math.max(0.5, Math.floor(available * 100) / 100))) : '10')
-    }
+    const handle = setTimeout(() => void fetchQuote(numeric, mode), 350)
+    return () => clearTimeout(handle)
+  }, [numeric, mode, fetchQuote])
+
+  const switchMode = (next: Mode) => {
+    if (next === mode) return
+    setMode(next)
+    setReceipt(null)
     setQuote(null)
-    setResult(null)
     flow.reset()
-  }, [cashOut])
-
-  const displayRate = useMemo(() => {
-    if (!rate) return null
-    return cashOut ? `1 USDC = ₺${formatAmount(rate)}` : `1 TRY = ${formatAmount(1 / rate, 4)} USDC`
-  }, [rate, cashOut])
-
-  const usdcEstimate = !cashOut && rate ? numeric / rate : 0
-  const valid = cashOut
-    ? Boolean(signer && line) && numeric >= 0.5 && numeric <= Math.min(available, ANCHOR_MAX_USDC)
-    : Boolean(signer && line && debt > 0) && numeric >= 50 && numeric <= ANCHOR_MAX_TRY && usdcEstimate >= 0.5
-
-  const total = quote ? quote.buyAmount : rate ? (cashOut ? numeric * rate : numeric / rate) : 0
-  const feeValue = quote ? quote.feeTotal : numeric * 0.005
-
-  const handleAmount = (value: string) => {
-    if (/^\d*[.,]?\d{0,7}$/.test(value)) setAmount(value)
+    setAmount(next === 'cashout' ? (maxCashOut > 0 ? String(Math.min(10, Math.floor(maxCashOut * 100) / 100)) : '10') : suggestedRepay > 0 ? String(suggestedRepay) : '')
   }
 
-  const swap = () => {
-    setSpin((value) => value + 1)
-    setFrom(to)
-  }
+  const amountError = useMemo(() => {
+    if (!amount || numeric <= 0) return null
+    if (cashOut) {
+      if (numeric < MIN_USDC || numeric > ANCHOR_MAX_USDC) return t('amountRange').replace('{min}', `${MIN_USDC} USDC`).replace('{max}', `${ANCHOR_MAX_USDC} USDC`)
+      if (numeric > available) return t('reasonBalance')
+      return null
+    }
+    if (numeric < MIN_TRY || numeric > ANCHOR_MAX_TRY) return t('amountRange').replace('{min}', `₺${MIN_TRY}`).replace('{max}', `₺${ANCHOR_MAX_TRY}`)
+    return null
+  }, [amount, numeric, cashOut, available, t])
+
+  const reasons: string[] = []
+  if (!signer) reasons.push(t('reasonWallet'))
+  else if (!line) reasons.push(t('reasonLine'))
+  if (!cashOut && debt <= 0) reasons.push(t('reasonDebt'))
+  if (numeric <= 0) reasons.push(t('reasonAmount'))
+  if (numeric > 0 && !amountError && !quote) reasons.push(t('reasonQuote'))
+  const valid = reasons.length === 0 && !amountError && !flow.busy
 
   const runCashOut = () =>
     flow.run(['anchorAuth', 'anchorQuote', 'anchorWithdraw', 'paying', 'anchorWait', 'recording', 'done'], async (mark) => {
       if (!signer) throw new Error(t('needWallet'))
-      if (!line) throw new Error(t('needLine'))
-      setResult(null)
+      setReceipt(null)
       mark(0, 'active')
       const token = await authenticate(signer)
       mark(0, 'done')
@@ -155,27 +110,33 @@ export function ExchangeCard({ signer, wallet, line, health, rate, refresh }: Sh
       const settled = await waitForStatus(token, instruction.id, (status) => status === 'completed', (tx) => mark(4, 'active', tx.status))
       if (settled.status !== 'completed') throw new Error(`anchor status ${settled.status}`)
       const tryPaid = Number(settled.amountOut ?? fresh.buyAmount)
-      mark(4, 'done', `₺${formatAmount(tryPaid)}${settled.externalTransactionId ? ` · ${settled.externalTransactionId}` : ''}`)
+      mark(4, 'done', `₺${formatAmount(tryPaid)}`)
       mark(5, 'active')
       const recordHash = await recordPayout(signer, instruction.id, BigInt(Math.round(tryPaid * 100)))
       mark(5, 'done', txLink(recordHash))
       mark(6, 'done')
-      setResult(`₺${formatAmount(tryPaid)}${settled.externalTransactionId ? ` · ${t('reference')}: ${settled.externalTransactionId}` : ''}`)
+      const links = [{ label: t('view'), href: txLink(hash) }, ...(settled.moreInfoUrl ? [{ label: t('anchorTx'), href: settled.moreInfoUrl }] : [])]
+      const rows: ReceiptRow[] = [
+        { label: t('sentUsdc'), value: `${formatAmount(numeric)} USDC` },
+        { label: t('paidTry'), value: `₺${formatAmount(tryPaid)}` },
+      ]
+      if (settled.externalTransactionId) rows.push({ label: t('reference'), value: settled.externalTransactionId, copy: settled.externalTransactionId })
+      setReceipt({ title: t('receiptCashOut'), rows, links })
+      addHistory(signer.address, { kind: 'cashout', title: t('receiptCashOut'), amount: `₺${formatAmount(tryPaid)}`, detail: settled.externalTransactionId, links })
       await refresh()
     })
 
   const runRepay = () =>
     flow.run(['anchorAuth', 'anchorDeposit', 'anchorBank', 'anchorWait', 'converting', 'sending', 'done'], async (mark) => {
-      if (!signer) throw new Error(t('needWallet'))
-      if (!line || !health) throw new Error(t('needLine'))
-      setResult(null)
+      if (!signer || !health) throw new Error(t('needWallet'))
+      setReceipt(null)
       mark(0, 'active')
       const token = await authenticate(signer)
       mark(0, 'done')
       mark(1, 'active')
       const fresh = await quoteTryToUsdc(numeric)
       const deposit = await startDeposit(token, signer.address, numeric)
-      mark(1, 'done', deposit.reference ? `${t('reference')}: ${deposit.reference} · IBAN ${deposit.iban ?? ''}` : deposit.id)
+      mark(1, 'done', deposit.reference ? `${t('iban')} ${deposit.iban ?? ''} · ${t('reference')} ${deposit.reference}` : deposit.id)
       mark(2, 'active')
       await simulateBankTransfer(token, deposit.id, numeric)
       mark(2, 'done')
@@ -194,107 +155,111 @@ export function ExchangeCard({ signer, wallet, line, health, rate, refresh }: Sh
       const hash = await repayLine(signer, toStroops(repayUsdc.toFixed(7)), toStroops(withdrawXlm.toFixed(7)))
       mark(5, 'done', txLink(hash))
       mark(6, 'done')
-      setResult(`${formatAmount(repayUsdc)} USDC ${t('repaid')}`)
+      const remaining = Math.max(0, health.debtUsdc - repayUsdc)
+      const links = [{ label: t('view'), href: txLink(hash) }, ...(deposit.moreInfoUrl ? [{ label: t('anchorTx'), href: deposit.moreInfoUrl }] : [])]
+      const rows: ReceiptRow[] = [
+        { label: t('amountTry'), value: `₺${formatAmount(numeric)}` },
+        { label: t('receivedUsdc'), value: `${formatAmount(received)} USDC` },
+        { label: t('repaidUsdc'), value: `${formatAmount(repayUsdc)} USDC` },
+        { label: t('remainingDebt'), value: `${formatAmount(remaining)} USDC` },
+      ]
+      if (fullRepay && withdrawAll) rows.push({ label: t('collateralBack'), value: `${formatAmount(health.collateralXlm)} XLM` })
+      setReceipt({ title: t('receiptRepay'), rows, links })
+      addHistory(signer.address, { kind: 'repay', title: t('receiptRepay'), amount: `${formatAmount(repayUsdc)} USDC`, detail: `₺${formatAmount(numeric)}`, links })
       await refresh()
     })
 
+  const total = quote ? quote.value.buyAmount : rate ? (cashOut ? numeric * rate : numeric / rate) : 0
+  const fee = quote ? quote.value.feeTotal : numeric * 0.005
+  const rateLine = rate ? (cashOut ? `1 USDC = ₺${formatAmount(rate)}` : `₺1 = ${formatAmount(1 / rate, 4)} USDC`) : '·'
+
   return (
     <div className="card">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h3 className="flex items-center gap-2 text-lg text-ink">
-          <RefreshCw className="h-5 w-5" />
+          <TokenIcon symbol="TRY" size={22} />
           {t('exchange')}
         </h3>
-        <span className="pill">SEP-6 · tr-mock-anchor</span>
+        <span className="pill">SEP-6 · {ANCHOR_HOME_DOMAIN}</span>
       </div>
-      <p className="mt-1 text-sm text-mute">{cashOut ? t('cashOutHint') : t('repayHint')}</p>
-
-      <div className="relative mt-5 flex items-center justify-between rounded-2xl border border-line bg-white p-3">
-        <motion.div key={`${spin}-from`} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25 }}>
-          <div className="mb-1 pl-1 text-xs text-mute">{t('from')}</div>
-          <CurrencySelector value={from} onChange={(currency) => setFrom(currency)} disabled={flow.busy} />
-        </motion.div>
-        <motion.button
-          type="button"
-          onClick={swap}
+      <div className="mt-4">
+        <ModeSwitch
+          name="testnet-exchange"
+          value={mode}
+          onChange={switchMode}
           disabled={flow.busy}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.9 }}
-          animate={{ rotate: spin * 180 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-          className="absolute left-1/2 top-1/2 inline-flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-white text-ink shadow-sm transition hover:border-ink disabled:opacity-50"
-          aria-label={t('swap')}
-        >
-          <ArrowRightLeft className="h-4 w-4" />
-        </motion.button>
-        <motion.div key={`${spin}-to`} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25 }} className="text-right">
-          <div className="mb-1 pr-1 text-xs text-mute">{t('to')}</div>
-          <div className="flex justify-end">
-            <CurrencySelector value={to} onChange={(currency) => setFrom(currency === 'USDC' ? 'TRY' : 'USDC')} disabled={flow.busy} />
-          </div>
-        </motion.div>
-      </div>
-
-      <div className="relative mt-6 text-center">
-        <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-6xl text-ink opacity-[0.06]">
-          {from === 'TRY' ? '₺' : 'USDC'}
-        </span>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={amount}
-          onChange={(event) => handleAmount(event.target.value)}
-          disabled={flow.busy}
-          placeholder="0,00"
-          className="w-full bg-transparent text-center text-6xl tracking-tight text-ink outline-none placeholder:text-mute"
+          options={[
+            { id: 'cashout', label: t('modeCashOut'), icon: <ArrowDownToLine className="h-4 w-4" /> },
+            { id: 'repay', label: t('modeRepay'), icon: <Banknote className="h-4 w-4" /> },
+          ]}
         />
-        <p className="mt-1 text-sm text-mute">
-          {cashOut
-            ? `${t('available')}: ${formatAmount(available)} USDC`
-            : debt > 0
-              ? `${t('debt')}: ${formatAmount(debt)} USDC ≈ ₺${formatAmount(rate ? debt * rate : 0)}`
-              : t('noDebtHint')}
-        </p>
       </div>
+      <p className="mt-3 text-sm text-mute">{cashOut ? t('cashOutHint') : t('repayHint')}</p>
 
-      <div className="mt-5 rounded-2xl bg-soft px-4 py-2 text-center text-sm text-mute">{displayRate ?? '·'}</div>
-
-      <div className="mt-4 space-y-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-mute">{t('fee')} (0,5%)</span>
-          <span className="text-ink">{money(feeValue, from, 4)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-mute">{t('networkFee')}</span>
-          <span className="inline-flex items-center gap-1 text-ink">
-            <TokenIcon symbol="XLM" size={14} /> 0,0001 XLM
+      <div className="mt-4 space-y-3">
+        {cashOut ? (
+          <AmountField symbol="USDC" label={t('amountUsdc')} value={amount} onChange={setAmount} balance={available} max={maxCashOut} presets error={amountError} disabled={flow.busy} autoFocus />
+        ) : (
+          <AmountField
+            symbol="TRY"
+            label={t('amountTry')}
+            value={amount}
+            onChange={setAmount}
+            error={amountError}
+            disabled={flow.busy}
+            hint={debt > 0 ? `${t('debt')}: ${formatAmount(debt)} USDC${rate ? ` ≈ ₺${formatAmount(debt * rate)}` : ''}` : t('noDebtHint')}
+            extra={
+              suggestedRepay > 0 ? (
+                <button type="button" className="chip" onClick={() => setAmount(String(suggestedRepay))}>
+                  {t('closeDebt')} · ₺{formatAmount(suggestedRepay, 0)}
+                </button>
+              ) : null
+            }
+          />
+        )}
+        <div className="flex items-center justify-between rounded-2xl border border-line px-4 py-3">
+          <span className="text-sm text-mute">{t('youGet')}</span>
+          <span className="inline-flex items-center gap-2 text-xl tracking-tight text-ink">
+            <TokenIcon symbol={cashOut ? 'TRY' : 'USDC'} size={20} />
+            {cashOut ? `₺${formatAmount(total)}` : `${formatAmount(total, 4)} USDC`}
           </span>
         </div>
-        <div className="flex items-center justify-between border-t border-line pt-2">
-          <span className="text-ink">{t('total')}</span>
-          <span className="inline-flex items-center gap-2 text-lg text-ink">
-            <TokenIcon symbol={to} size={20} />
-            {money(total, to, to === 'TRY' ? 2 : 4)}
-          </span>
-        </div>
+        <QuoteBar primary={rateLine} secondary={t('quoteHint')} updatedAt={quote?.at ?? null} loading={quoting} onRefresh={() => void fetchQuote(numeric, mode)} source={t('quoteAnchor')} />
+        <Details
+          title={t('details')}
+          rows={[
+            { label: t('feeAnchorPct'), value: cashOut ? `${formatAmount(fee, 4)} USDC` : `₺${formatAmount(fee)}` },
+            { label: t('networkFee'), value: t('networkFeeValue'), icon: <TokenIcon symbol="XLM" size={14} /> },
+            { label: t('seamDex'), value: t('seamDexValue') },
+            { label: t('arrival'), value: t('arrivalSandbox') },
+          ]}
+        />
+        {!cashOut ? (
+          <label className="flex cursor-pointer items-center gap-2 rounded-2xl border border-line px-4 py-3 text-sm">
+            <input type="checkbox" checked={withdrawAll} onChange={(event) => setWithdrawAll(event.target.checked)} className="accent-accent-strong" />
+            {t('withdrawAllShort')}
+          </label>
+        ) : null}
       </div>
 
-      {!cashOut ? (
-        <label className="mt-4 flex cursor-pointer items-center gap-2 rounded-2xl border border-line px-4 py-3 text-sm">
-          <input type="checkbox" checked={withdrawAll} onChange={(event) => setWithdrawAll(event.target.checked)} className="accent-black" />
-          {t('withdrawCollateral')}
-        </label>
-      ) : null}
-
-      <MotionButton full className="mt-5 py-3 text-base" disabled={!valid || flow.busy} onClick={() => void (cashOut ? runCashOut() : runRepay())}>
-        <RefreshCw className={`h-4 w-4 ${flow.busy ? 'animate-spin' : ''}`} />
+      <MotionButton full className="mt-4 py-3 text-base" disabled={!valid} onClick={() => void (cashOut ? runCashOut() : runRepay())}>
         {cashOut ? t('cashOutAction') : t('repayAction')}
       </MotionButton>
-      {!line && signer ? <p className="mt-2 text-xs text-mute">{t('needLine')}</p> : null}
+      <Blocker reasons={reasons} />
       <Steps steps={flow.steps} />
-      {result ? <div className="mt-4 rounded-2xl bg-soft p-4 text-sm text-ink">{result}</div> : null}
+      {receipt ? (
+        <Receipt
+          title={receipt.title}
+          rows={receipt.rows}
+          links={receipt.links}
+          resetLabel={t('newTransaction')}
+          onReset={() => {
+            setReceipt(null)
+            flow.reset()
+          }}
+        />
+      ) : null}
       {flow.error ? <p className="mt-3 break-all text-sm text-ink">{flow.error}</p> : null}
-      <p className="mt-3 text-xs text-mute">{t('seamHint')}</p>
     </div>
   )
 }

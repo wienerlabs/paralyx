@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @font-face {
   font-family: "Sora";
   src: url("/fonts/sora-light.ttf") format("truetype");
@@ -14,21 +16,42 @@
   --color-mute: #6b6b6b;
   --color-line: #e6e6e6;
   --color-soft: #f6f6f6;
+  --color-surface: #ffffff;
+  --color-canvas: #ffffff;
+  --color-accent: #d9dbfc;
+  --color-accent-strong: #c2c6fa;
+  --color-accent-soft: #eef0ff;
+  --color-on-accent: #111111;
   --radius-card: 1.5rem;
 }
 
+html.dark {
+  --color-ink: #f2f2f5;
+  --color-mute: #9a9aa5;
+  --color-line: #2b2b33;
+  --color-soft: #1a1a20;
+  --color-surface: #131318;
+  --color-canvas: #0b0b0e;
+  --color-accent: #d9dbfc;
+  --color-accent-strong: #e4e6fd;
+  --color-accent-soft: #23254a;
+  --color-on-accent: #111111;
+  color-scheme: dark;
+}
+
 html {
-  background: #ffffff;
+  background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-weight: 300;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: #ffffff;
+  background: var(--color-canvas);
 }
 
 html.paralyx-bg body::before {
@@ -41,6 +64,10 @@ html.paralyx-bg body::before {
   pointer-events: none;
 }
 
+html.paralyx-bg.dark body::before {
+  opacity: 0.1;
+}
+
 @keyframes paralyx-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.6); opacity: 0.4; }
@@ -51,7 +78,8 @@ html.paralyx-bg body::before {
   width: 8px;
   height: 8px;
   border-radius: 9999px;
-  background: #111111;
+  background: var(--color-accent-strong);
+  box-shadow: 0 0 0 1px var(--color-line);
   animation: paralyx-pulse 1.6s ease-in-out infinite;
 }
 
@@ -59,23 +87,36 @@ html.paralyx-bg body::before {
   font-weight: 300;
 }
 
+:focus-visible {
+  outline: 2px solid var(--color-accent-strong);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
 @layer components {
   .card {
-    @apply rounded-3xl border border-line bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.03)];
+    @apply rounded-3xl border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(0,0,0,0.03)];
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border border-ink bg-ink px-5 py-2.5 text-sm text-white transition hover:bg-white hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-ink disabled:hover:text-white;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-accent bg-accent px-5 py-2.5 text-sm text-on-accent transition hover:border-accent-strong hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-accent disabled:hover:bg-accent;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border border-line bg-white px-5 py-2.5 text-sm text-ink transition hover:border-ink disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-line bg-surface px-5 py-2.5 text-sm text-ink transition hover:border-accent-strong hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:bg-surface;
   }
   .input {
-    @apply w-full rounded-2xl border border-line bg-white px-4 py-3 text-base text-ink outline-none transition placeholder:text-mute focus:border-ink;
+    @apply w-full rounded-2xl border border-line bg-surface px-4 py-3 text-base text-ink outline-none transition placeholder:text-mute focus:border-accent-strong focus:ring-2 focus:ring-accent-soft;
   }
   .pill {
     @apply inline-flex items-center rounded-full border border-line bg-soft px-3 py-1 text-xs text-mute;
   }
   .label {
     @apply mb-1.5 block text-xs text-mute;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-mute transition hover:border-accent-strong hover:text-ink disabled:cursor-not-allowed disabled:opacity-40;
   }
 }

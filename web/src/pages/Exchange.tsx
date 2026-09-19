@@ -1,5 +1,6 @@
 import { ExchangeCard } from '../components/ExchangeCard'
 import { MainnetExchange } from '../components/MainnetExchange'
+import { History } from '../components/exchange/History'
 import { HAS_SANDBOX_ANCHOR } from '../config'
 import { LineCard } from '../components/cards'
 import { useT } from '../lib/i18n'
@@ -15,8 +16,9 @@ export function Exchange() {
         <p className="mt-2 max-w-2xl text-base text-mute">{HAS_SANDBOX_ANCHOR ? t('cashBody') : t('exchangeBodyMainnet')}</p>
       </section>
       <section className="grid gap-5 lg:grid-cols-5">
-        <div className="lg:col-span-3">
+        <div className="space-y-5 lg:col-span-3">
           {HAS_SANDBOX_ANCHOR ? <ExchangeCard {...shared} /> : <MainnetExchange {...shared} />}
+          <History address={shared.signer?.address ?? null} />
         </div>
         <div className="space-y-5 lg:col-span-2">
           <LineCard {...shared} />
