@@ -66,7 +66,7 @@ export const NETWORKS: Record<NetworkId, Network> = {
     friendbotUrl: null,
     explorerTx: 'https://stellar.expert/explorer/public/tx/',
     explorerContract: 'https://stellar.expert/explorer/public/contract/',
-    creditLine: '',
+    creditLine: 'CDCYHJPSXA6YT5HWXOWN5R6NL2BMD5PCIXGPBVOU2C4MJHFVV6LC7ITC',
     pool: 'CAJJZSGMMM3PD7N33TAPHGBUGTB43OC73HVIK2L2G6BNGGGYOSSYBXBD',
     oracle: 'CCVTVW2CVA7JLH4ROQGP3CU4T3EXVCK66AZGSM4MUQPXAI4QHCZPOATS',
     xlmSac: 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA',

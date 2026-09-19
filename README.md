@@ -4,9 +4,9 @@
 
 **Turkish lira liquidity without selling your XLM.** Post XLM as collateral to a Blend v2 pool, borrow USDC, cash the USDC out as lira to a bank account through a SEP-6 anchor, and repay in lira. Everything runs on Stellar testnet.
 
-Live app: https://paralyx.vercel.app · Contract: [`CDZ22YMZ…L5Z4B`](https://stellar.expert/explorer/testnet/contract/CDZ22YMZKGQZVHJKRJITRZREFKCTCURUKRC63G7ABIPO6SBHXTXL5Z4B) · Track: Rise In x Stellar Pro Hackathon, Scale track, Istanbul, 19 to 20 September 2026
+Live app: https://paralyx.vercel.app · Testnet contract: [`CDZ22YMZ…L5Z4B`](https://stellar.expert/explorer/testnet/contract/CDZ22YMZKGQZVHJKRJITRZREFKCTCURUKRC63G7ABIPO6SBHXTXL5Z4B) · Mainnet contract: [`CDCYHJPS…C7ITC`](https://stellar.expert/explorer/public/contract/CDCYHJPSXA6YT5HWXOWN5R6NL2BMD5PCIXGPBVOU2C4MJHFVV6LC7ITC) · Track: Rise In x Stellar Pro Hackathon, Scale track, Istanbul, 19 to 20 September 2026
 
-> Testnet only. No real money moves. The anchor's bank leg is a sandbox; the Stellar leg, the Blend positions and the USDC are real testnet assets.
+> Two networks behind one switch in the top bar. **Testnet** is the hackathon deliverable: Blend TestnetV2 plus the sandbox TRY anchor, no real money. **Mainnet** is the same contract deployed against Blend's Fixed pool with real XLM and USDC; the lira leg there goes through a licensed exchange because no production TRY anchor exists yet. The mainnet contract is unaudited, use small amounts.
 
 ## Özet (TR)
 
@@ -111,6 +111,30 @@ sequenceDiagram
 | Paralyx market maker | `GBMT43HXUDOSTBA4ALPIFJWRI72PH5YICAQIDOEJ23YEWUZ7TW2F6T7Q` |
 
 Proof transactions from the build session: a full lira cash-out of 2 USDC that the anchor settled as 97.08 TRY with bank reference `FAST-NUG8V4XHN6` ([`d58c43f8…dfe4c`](https://stellar.expert/explorer/testnet/tx/d58c43f8cf23b9ffc350b9e04f1de3ec5cf7e5534e2bfebf5fe9ab06761dfe4c)), and the market maker's own line on Blend through the contract (8,000 XLM collateral, 2,000 USDC borrowed). Every `open_line`, `repay_line` and `record_payout` call emits an event; the [stats page](https://paralyx.vercel.app/stats) reads them straight from RPC.
+
+## Mainnet
+
+The same `credit_line` wasm is deployed on Stellar mainnet against Blend v2's Fixed pool. Switching the top bar to Mainnet points the app at it.
+
+| Item | Value |
+|---|---|
+| `credit_line` contract | `CDCYHJPSXA6YT5HWXOWN5R6NL2BMD5PCIXGPBVOU2C4MJHFVV6LC7ITC` |
+| Wasm hash | `372416665b3b71cb8282c791c3ab1b021e78ccd7702f8e6eb8f8eb175b8666de` (identical to testnet) |
+| Upload transaction | [`edfaa2f8…1e305`](https://stellar.expert/explorer/public/tx/edfaa2f878f1a4899e69d3eaaa83c84906e0bcc8f325ff86c73acf8aacd1e305) |
+| Deploy transaction | [`8358959d…be80e`](https://stellar.expert/explorer/public/tx/8358959dbb225de13e9d3cfbbc1d56a521d82caac947327fbb55ad92baabe80e) |
+| Contract admin | `GDOZ44UXCLBBUTRQFOI6G5HQ5MGHG2LLEXALFKP4MTQBWEFHKPHDV52F` |
+| Blend v2 Fixed pool | `CAJJZSGMMM3PD7N33TAPHGBUGTB43OC73HVIK2L2G6BNGGGYOSSYBXBD` (XLM collateral factor 0.75, USDC 0.95) |
+| Blend oracle | `CCVTVW2CVA7JLH4ROQGP3CU4T3EXVCK66AZGSM4MUQPXAI4QHCZPOATS` |
+| XLM Stellar Asset Contract | `CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA` |
+| USDC (Circle) | `CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75`, issuer `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN` |
+| USDT0 (Tether over LayerZero) | `USDT0:GATISXX6BZ6NC7IKQBY37CJD4SOZL3CYZJWXEDG6JVIY4WBS6KXJHN6Q` |
+
+What changes on mainnet:
+
+- **One USDC.** Blend's USDC and the anchor USDC are the same Circle asset, so the testnet conversion seam disappears.
+- **Lira leg through a licensed exchange.** There is no production SEP-6 TRY anchor on Stellar yet. The exchange page sends the borrowed USDC to your exchange deposit address as XLM in a single path payment with the exchange's memo; you sell there and withdraw lira to your IBAN. When a licensed anchor opens, the SEP-6 adapter used on testnet takes over with a home domain change.
+- **Repay with USDT0 or USDC.** USDT0 in the wallet converts to USDC on the Stellar DEX and repays the line in the same flow; USDC repays directly.
+- **Fees are real.** Uploading the 9.5 KB wasm cost about 15 XLM of code storage rent; creating the contract about 2 XLM. Inclusion fees needed 2,000 stroops during the deploy because the default 100 was below the network's Soroban minimum at the time.
 
 ## The contract
 
