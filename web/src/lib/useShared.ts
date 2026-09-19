@@ -16,6 +16,7 @@ import type { Shared } from './shared'
 import { useWallet } from './wallet'
 import { HAS_SANDBOX_ANCHOR } from '../config'
 import { useLivePrices } from './prices'
+import { getPoolStatus } from './blend'
 
 let rateCache: { at: number; value: number } | null = null
 
@@ -25,6 +26,7 @@ export function useShared(): Shared & { events: ActivityEvent[]; allEvents: Acti
   const [line, setLine] = useState<Line | null>(null)
   const [health, setHealth] = useState<Health | null>(null)
   const [reserves, setReserves] = useState<{ xlm: ReserveView; usdc: ReserveView } | null>(null)
+  const [poolStatus, setPoolStatus] = useState<number | null>(null)
   const [rate, setRate] = useState<number | null>(rateCache?.value ?? null)
   const [events, setEvents] = useState<ActivityEvent[]>([])
   const [allEvents, setAllEvents] = useState<ActivityEvent[]>([])
@@ -66,6 +68,7 @@ export function useShared(): Shared & { events: ActivityEvent[]; allEvents: Acti
 
   useEffect(() => {
     getReserves().then(setReserves).catch(() => setReserves(null))
+    getPoolStatus().then(setPoolStatus).catch(() => setPoolStatus(null))
     if (!HAS_SANDBOX_ANCHOR) return
     if (rateCache && Date.now() - rateCache.at < 60_000) return
     quoteUsdcToTry(1)
@@ -77,5 +80,5 @@ export function useShared(): Shared & { events: ActivityEvent[]; allEvents: Acti
   }, [])
 
   const effectiveRate = HAS_SANDBOX_ANCHOR ? rate : live.tryPerUsd
-  return { signer, wallet, line, health, reserves, rate: effectiveRate, refresh, events, allEvents, loading }
+  return { signer, wallet, line, health, reserves, rate: effectiveRate, poolStatus, refresh, events, allEvents, loading }
 }

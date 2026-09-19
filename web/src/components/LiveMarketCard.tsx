@@ -3,6 +3,7 @@ import type { PoolOverview } from '../lib/blend'
 import { useT } from '../lib/i18n'
 import type { LivePrices } from '../lib/prices'
 import { TokenIcon } from './TokenIcon'
+import { PoolStatusBadge } from './PoolStatusBadge'
 
 function usd(value: number): string {
   return value >= 1_000_000 ? `$${formatAmount(value / 1_000_000)}M` : `$${formatAmount(value, 0)}`
@@ -37,6 +38,10 @@ export function LiveMarketCard({ live, overview }: { live: LivePrices; overview:
         <div className="flex items-center justify-between rounded-2xl bg-soft px-4 py-3">
           <span className="text-sm text-mute">{t('linesTotal')}</span>
           <span className="text-xl tracking-tight text-ink">{overview ? overview.lineCount : '·'}</span>
+        </div>
+        <div className="flex items-center justify-between rounded-2xl bg-soft px-4 py-3">
+          <span className="text-sm text-mute">{t('poolStatusLabel')}</span>
+          <PoolStatusBadge status={overview?.status ?? null} />
         </div>
       </div>
       <p className="mt-4 text-xs text-mute">Reflector FX · Stellar DEX · Blend v2</p>

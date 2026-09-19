@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BLEND_POOL, CREDIT_LINE_CONTRACT, EXPLORER_CONTRACT, IS_MAINNET } from '../config'
-import { getPoolOverview, type PoolOverview } from '../lib/blend'
+import { borrowAllowed, getPoolOverview, poolStatusKey, supplyAllowed, type PoolOverview } from '../lib/blend'
+import { PoolStatusBadge } from '../components/PoolStatusBadge'
 import { formatAmount, getActivity, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
 import { PriceChart, type Point } from '../components/PriceChart'
@@ -85,7 +86,10 @@ export function Market() {
       </section>
       <section className="card mt-5 overflow-x-auto">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-lg text-ink">{IS_MAINNET ? t('poolNameMainnet') : t('poolNameTestnet')}</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-lg text-ink">{IS_MAINNET ? t('poolNameMainnet') : t('poolNameTestnet')}</h3>
+            <PoolStatusBadge status={overview?.status ?? null} />
+          </div>
           <a className="text-xs text-mute underline" href={`${EXPLORER_CONTRACT}${BLEND_POOL}`} target="_blank" rel="noreferrer">
             {BLEND_POOL.slice(0, 8)}…{BLEND_POOL.slice(-6)}
           </a>
@@ -144,6 +148,13 @@ export function Market() {
           </tbody>
         </table>
         <p className="mt-3 text-xs text-mute">{t('ratesHint')}</p>
+        {overview && !borrowAllowed(overview.status) ? (
+          <div className="mt-3 rounded-2xl bg-soft p-4 text-xs text-mute">
+            <div className="text-ink">{t(poolStatusKey(overview.status))}</div>
+            <p className="mt-1">{supplyAllowed(overview.status) ? t('borrowClosedHint') : t('supplyClosedHint')}</p>
+            {IS_MAINNET ? <p className="mt-1">{t('borrowClosedMainnetNote')}</p> : null}
+          </div>
+        ) : null}
         {error ? <p className="mt-2 text-xs text-ink">{error}</p> : null}
       </section>
       <section className="mt-5">

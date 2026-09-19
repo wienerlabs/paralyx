@@ -11,6 +11,7 @@ export interface Shared {
   health: Health | null
   reserves: { xlm: ReserveView; usdc: ReserveView } | null
   rate: number | null
+  poolStatus: number | null
   refresh: () => Promise<void>
 }
 

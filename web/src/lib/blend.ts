@@ -31,6 +31,34 @@ export interface PoolOverview {
   utilization: number
   lineCount: number
   backstopRate: number
+  status: number
+}
+
+export type PoolStatusKey = 'poolStatusActive' | 'poolStatusOnIce' | 'poolStatusFrozen' | 'poolStatusSetup'
+
+export function poolStatusKey(status: number): PoolStatusKey {
+  if (status <= 1) return 'poolStatusActive'
+  if (status <= 3) return 'poolStatusOnIce'
+  if (status <= 5) return 'poolStatusFrozen'
+  return 'poolStatusSetup'
+}
+
+export function borrowAllowed(status: number | null): boolean {
+  return status !== null && status <= 1
+}
+
+export function supplyAllowed(status: number | null): boolean {
+  return status !== null && status <= 3
+}
+
+let statusCache: { at: number; value: number } | null = null
+
+export async function getPoolStatus(): Promise<number> {
+  if (statusCache && Date.now() - statusCache.at < 60_000) return statusCache.value
+  const config = (await read(BLEND_POOL, 'get_config', [])) as { status: number }
+  const value = Number(config.status)
+  statusCache = { at: Date.now(), value }
+  return value
 }
 
 function read(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
@@ -54,8 +82,9 @@ function borrowRate(config: RawReserve['config'], irMod: number, utilization: nu
 }
 
 export async function getPoolOverview(): Promise<PoolOverview> {
-  const config = (await read(BLEND_POOL, 'get_config', [])) as { bstop_rate: number }
+  const config = (await read(BLEND_POOL, 'get_config', [])) as { bstop_rate: number; status: number }
   const backstopRate = Number(config.bstop_rate) / SEVEN
+  statusCache = { at: Date.now(), value: Number(config.status) }
   const lineCount = CREDIT_LINE_CONTRACT ? Number(await read(CREDIT_LINE_CONTRACT, 'get_line_count', []).catch(() => 0)) : 0
   const rows = await Promise.all(
     reserveList.map(async (entry): Promise<ReserveRow> => {
@@ -96,6 +125,7 @@ export async function getPoolOverview(): Promise<PoolOverview> {
     utilization: totalSuppliedUsd > 0 ? totalBorrowedUsd / totalSuppliedUsd : 0,
     lineCount,
     backstopRate,
+    status: Number(config.status),
   }
 }
 

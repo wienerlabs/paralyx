@@ -248,6 +248,21 @@ export async function getWalletState(address: string): Promise<WalletState> {
   }
 }
 
+export interface DestinationCheck {
+  exists: boolean
+  memoRequired: boolean
+}
+
+export async function checkDestination(address: string): Promise<DestinationCheck> {
+  try {
+    const account = await horizon.loadAccount(address)
+    const attributes = (account as unknown as { data_attr?: Record<string, string> }).data_attr ?? {}
+    return { exists: true, memoRequired: attributes['config.memo_required'] !== undefined }
+  } catch {
+    return { exists: false, memoRequired: false }
+  }
+}
+
 export async function fundWithFriendbot(address: string): Promise<void> {
   if (!FRIENDBOT_URL) throw new Error('friendbot is testnet only')
   const response = await fetch(`${FRIENDBOT_URL}?addr=${encodeURIComponent(address)}`)

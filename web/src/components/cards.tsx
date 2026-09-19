@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { ensureTrustlines, formatAmount, fromStroops, fundWithFriendbot, openLine, previewBorrowable, toStroops, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
 import { CREDIT_LINE_CONTRACT, FRIENDBOT_URL, IS_MAINNET } from '../config'
+import { borrowAllowed, supplyAllowed } from '../lib/blend'
+import { PoolStatusBadge } from './PoolStatusBadge'
 import { useLivePrices } from '../lib/prices'
 import { getTryPerUsdHistory, getXlmUsdHistory } from '../lib/reflector'
 import { txLink, useFlow, type Shared } from '../lib/shared'
@@ -23,19 +25,27 @@ function Metric({ label, value, hint, symbol }: { label: string; value: string; 
   )
 }
 
-export function LineCard({ line, health, rate, wallet }: Shared) {
+export function LineCard({ line, health, rate, wallet, poolStatus }: Shared) {
   const { t } = useT()
+  const borrowingOpen = poolStatus === null || borrowAllowed(poolStatus)
   const limitTry = health && rate ? health.borrowableUsdc * rate : null
   return (
     <div className="card">
-      <div className="flex items-center gap-2 text-xs text-mute">
-        <TokenIcon symbol="TRY" size={18} />
-        {t('limit')}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs text-mute">
+          <TokenIcon symbol="TRY" size={18} />
+          {t('limit')}
+        </div>
+        <PoolStatusBadge status={poolStatus} />
       </div>
-      <div className="mt-2 text-5xl tracking-tight text-ink">{limitTry === null ? '·' : `₺${formatAmount(limitTry, 0)}`}</div>
+      {borrowingOpen ? (
+        <div className="mt-2 text-5xl tracking-tight text-ink">{limitTry === null ? '·' : `₺${formatAmount(limitTry, 0)}`}</div>
+      ) : (
+        <div className="mt-2 text-3xl tracking-tight text-ink">{t('limitClosed')}</div>
+      )}
       <div className="mt-1 text-sm text-mute">
-        {health ? `${formatAmount(health.borrowableUsdc)} USDC` : ''}
-        {rate ? ` · 1 USDC ≈ ₺${formatAmount(rate)}` : ''}
+        {borrowingOpen && health ? `${formatAmount(health.borrowableUsdc)} USDC` : ''}
+        {rate ? `${borrowingOpen && health ? ' · ' : ''}1 USDC ≈ ₺${formatAmount(rate)}` : ''}
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3">
         <Metric
@@ -126,11 +136,16 @@ export function WalletCard({ signer, wallet, refresh }: Shared) {
   )
 }
 
-export function OpenCard({ signer, wallet, health, reserves, rate, refresh }: Shared) {
+export function OpenCard({ signer, wallet, health, reserves, rate, refresh, poolStatus }: Shared) {
   const { t } = useT()
   const [collateral, setCollateral] = useState('100')
   const [borrow, setBorrow] = useState('10')
   const flow = useFlow()
+  const canBorrow = poolStatus === null || borrowAllowed(poolStatus)
+  const canSupply = poolStatus === null || supplyAllowed(poolStatus)
+  useEffect(() => {
+    if (!canBorrow) setBorrow('0')
+  }, [canBorrow])
   const maxBorrow = useMemo(() => {
     if (!health || !reserves) return null
     const xlm = Number(collateral.replace(',', '.')) || 0
@@ -141,6 +156,8 @@ export function OpenCard({ signer, wallet, health, reserves, rate, refresh }: Sh
   const collateralNumber = Number(collateral.replace(',', '.')) || 0
   const valid =
     ready &&
+    canSupply &&
+    (canBorrow || borrowNumber === 0) &&
     collateralNumber >= 0 &&
     borrowNumber >= 0 &&
     collateralNumber + borrowNumber > 0 &&
@@ -176,15 +193,22 @@ export function OpenCard({ signer, wallet, health, reserves, rate, refresh }: Sh
           <label className="label flex items-center gap-2">
             <TokenIcon symbol="USDC" size={16} /> {t('borrowUsdc')}
           </label>
-          <input className="input" inputMode="decimal" value={borrow} onChange={(e) => setBorrow(e.target.value)} />
+          <input className="input disabled:bg-soft disabled:text-mute" inputMode="decimal" value={borrow} disabled={!canBorrow} onChange={(e) => setBorrow(e.target.value)} />
           <div className="mt-1 text-xs text-mute">
-            {maxBorrow !== null ? `${t('maxBorrow')} ${formatAmount(maxBorrow)} USDC` : ''}
-            {rate && borrowNumber > 0 ? ` · ${t('equalsTry')} ₺${formatAmount(borrowNumber * rate)}` : ''}
+            {!canBorrow ? t('limitClosed') : maxBorrow !== null ? `${t('maxBorrow')} ${formatAmount(maxBorrow)} USDC` : ''}
+            {canBorrow && rate && borrowNumber > 0 ? ` · ${t('equalsTry')} ₺${formatAmount(borrowNumber * rate)}` : ''}
           </div>
         </div>
       </div>
+      {poolStatus !== null && !canBorrow ? (
+        <div className="mt-4 rounded-2xl bg-soft p-4 text-xs text-mute">
+          <PoolStatusBadge status={poolStatus} />
+          <p className="mt-2">{canSupply ? t('borrowClosedHint') : t('supplyClosedHint')}</p>
+          {IS_MAINNET ? <p className="mt-1">{t('borrowClosedMainnetNote')}</p> : null}
+        </div>
+      ) : null}
       <MotionButton className="mt-4" disabled={!valid || flow.busy} onClick={() => void submit()}>
-        {t('open')}
+        {canBorrow ? t('open') : t('collateralOnly')}
       </MotionButton>
       {!CREDIT_LINE_CONTRACT ? <p className="mt-2 text-xs text-mute">{t('contractPending')}</p> : !ready && signer ? <p className="mt-2 text-xs text-mute">{t('walletBody')}</p> : null}
       <Steps steps={flow.steps} />
