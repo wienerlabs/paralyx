@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ActivityList } from '../components/cards'
 import { MotionButton } from '../components/MotionButton'
 import { TokenIcon, type TokenSymbol } from '../components/TokenIcon'
 import { CREDIT_LINE_CONTRACT, EXPLORER_CONTRACT } from '../config'
+import { useCached } from '../lib/store'
 import { formatAmount, fromStroops, getActivity, getLineCount, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
 import { useWallet } from '../lib/wallet'
@@ -10,25 +11,11 @@ import { useWallet } from '../lib/wallet'
 export function Activity() {
   const { t } = useT()
   const { address } = useWallet()
-  const [count, setCount] = useState<number | null>(null)
-  const [events, setEvents] = useState<ActivityEvent[]>([])
   const [mine, setMine] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      const [total, activity] = await Promise.all([getLineCount().catch(() => null), getActivity().catch(() => [])])
-      if (cancelled) return
-      setCount(total)
-      setEvents(activity)
-    }
-    void load()
-    const timer = setInterval(() => void load(), 30_000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [])
+  const countQuery = useCached(CREDIT_LINE_CONTRACT ? 'lineCount' : null, getLineCount, { ttl: 30_000, persist: true, refreshMs: 30_000 })
+  const eventsQuery = useCached(CREDIT_LINE_CONTRACT ? 'events' : null, getActivity, { ttl: 20_000, persist: true, refreshMs: 30_000 })
+  const count = countQuery.data ?? null
+  const events = useMemo<ActivityEvent[]>(() => eventsQuery.data ?? [], [eventsQuery.data])
 
   const opened = events.filter((event) => event.kind === 'opened')
   const payouts = events.filter((event) => event.kind === 'payout')

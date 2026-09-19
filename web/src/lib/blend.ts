@@ -1,7 +1,7 @@
-import { Address, xdr } from '@stellar/stellar-sdk'
-import { BLEND_ORACLE, BLEND_POOL, CREDIT_LINE_CONTRACT, NETWORK } from '../config'
+import type { xdr } from '@stellar/stellar-sdk'
+import { BLEND_POOL, CREDIT_LINE_CONTRACT, NETWORK } from '../config'
 import type { TokenSymbol } from '../components/TokenIcon'
-import { pool as rpcPool } from './chain'
+import { fetchReserveRaw, pool as rpcPool } from './chain'
 
 const SEVEN = 10_000_000
 const TWELVE = 1_000_000_000_000
@@ -65,12 +65,7 @@ function read(contractId: string, method: string, args: xdr.ScVal[]): Promise<un
   return rpcPool.simulate(contractId, method, args)
 }
 
-interface RawReserve {
-  config: { c_factor: number; l_factor: number; util: number; max_util: number; r_base: number; r_one: number; r_two: number; r_three: number }
-  data: { b_rate: bigint; d_rate: bigint; b_supply: bigint; d_supply: bigint; ir_mod: bigint }
-}
-
-function borrowRate(config: RawReserve['config'], irMod: number, utilization: number): number {
+function borrowRate(config: { util: number; r_base: number; r_one: number; r_two: number; r_three: number }, irMod: number, utilization: number): number {
   const target = config.util / SEVEN
   const base = config.r_base / SEVEN
   const one = config.r_one / SEVEN
@@ -88,11 +83,7 @@ export async function getPoolOverview(): Promise<PoolOverview> {
   const lineCount = CREDIT_LINE_CONTRACT ? Number(await read(CREDIT_LINE_CONTRACT, 'get_line_count', []).catch(() => 0)) : 0
   const rows = await Promise.all(
     reserveList.map(async (entry): Promise<ReserveRow> => {
-      const raw = (await read(BLEND_POOL, 'get_reserve', [new Address(entry.asset).toScVal()])) as RawReserve
-      const priceRaw = (await read(BLEND_ORACLE, 'lastprice', [
-        xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Stellar'), new Address(entry.asset).toScVal()]),
-      ])) as { price: bigint } | null
-      const price = priceRaw ? Number(priceRaw.price) / SEVEN : 0
+      const { raw, price } = await fetchReserveRaw(entry.asset)
       const supplied = Number((BigInt(raw.data.b_supply) * BigInt(raw.data.b_rate)) / BigInt(TWELVE)) / SEVEN
       const borrowed = Number((BigInt(raw.data.d_supply) * BigInt(raw.data.d_rate)) / BigInt(TWELVE)) / SEVEN
       const utilization = supplied > 0 ? Math.min(1, borrowed / supplied) : 0

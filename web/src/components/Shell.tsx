@@ -1,7 +1,11 @@
 import { motion } from 'framer-motion'
 import { Activity, ArrowDownToLine, LayoutDashboard, LineChart, RefreshCw } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
-import { IS_MAINNET, NETWORK_ID, switchNetwork } from '../config'
+import { CREDIT_LINE_CONTRACT, IS_MAINNET, NETWORK_ID, switchNetwork } from '../config'
+import { getPoolOverview } from '../lib/blend'
+import { getActivity, getLineCount } from '../lib/chain'
+import { getTryPerUsdHistory, getXlmUsdHistory } from '../lib/reflector'
+import { load, useInflight } from '../lib/store'
 import { useT, type DictKey } from '../lib/i18n'
 import { shortAddress, useWallet } from '../lib/wallet'
 import { MotionButton } from './MotionButton'
@@ -24,11 +28,23 @@ const explore: Item[] = [
   { to: '/exchange', label: 'navExchange', icon: RefreshCw },
 ]
 
+function prefetch(path: string): void {
+  if (path === '/market') void load('overview', getPoolOverview, { ttl: 60_000, persist: true }).catch(() => undefined)
+  if (path === '/activity' && CREDIT_LINE_CONTRACT) {
+    void load('events', getActivity, { ttl: 20_000, persist: true }).catch(() => undefined)
+    void load('lineCount', getLineCount, { ttl: 30_000, persist: true }).catch(() => undefined)
+  }
+  if (path === '/') {
+    void load('chart:try', getTryPerUsdHistory, { ttl: 120_000, persist: true }).catch(() => undefined)
+    void load('chart:xlm', getXlmUsdHistory, { ttl: 120_000, persist: true }).catch(() => undefined)
+  }
+}
+
 function NavItem({ item }: { item: Item }) {
   const { t } = useT()
   const Icon = item.icon
   return (
-    <NavLink to={item.to} end={item.to === '/'}>
+    <NavLink to={item.to} end={item.to === '/'} onMouseEnter={() => prefetch(item.to)} onFocus={() => prefetch(item.to)}>
       {({ isActive }) => (
         <motion.span
           whileHover={{ x: 2 }}
@@ -49,6 +65,7 @@ function NavItem({ item }: { item: Item }) {
 export function Shell({ children }: { children: React.ReactNode }) {
   const { t, lang, setLang } = useT()
   const { address, openConnect } = useWallet()
+  const inflight = useInflight()
   return (
     <div className="min-h-screen text-ink">
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-line bg-white/85 px-4 py-6 backdrop-blur lg:flex">
@@ -78,7 +95,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <img src="/brand/paralyx-mark-256.png" alt="" className="h-6 w-6" draggable={false} />
             Paralyx
           </NavLink>
-          <div className="hidden text-sm text-mute lg:block">{t('tagline')}</div>
+          <div className="hidden items-center gap-3 text-sm text-mute lg:flex">
+            <span>{t('tagline')}</span>
+            {inflight > 0 ? (
+              <span className="inline-flex items-center gap-1.5 text-xs">
+                <span className="live-dot" /> {t('updating')}
+              </span>
+            ) : null}
+          </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center rounded-full border border-line p-0.5 text-xs">
               {(['testnet', 'mainnet'] as const).map((id) => (

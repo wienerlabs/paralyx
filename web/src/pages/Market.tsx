@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { BLEND_POOL, CREDIT_LINE_CONTRACT, EXPLORER_CONTRACT, IS_MAINNET } from '../config'
-import { borrowAllowed, getPoolOverview, poolStatusKey, supplyAllowed, type PoolOverview } from '../lib/blend'
+import { useCached } from '../lib/store'
+import { borrowAllowed, getPoolOverview, poolStatusKey, supplyAllowed } from '../lib/blend'
 import { PoolStatusBadge } from '../components/PoolStatusBadge'
 import { formatAmount, getActivity, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
@@ -29,30 +30,11 @@ function usd(value: number): string {
 
 export function Market() {
   const { t } = useT()
-  const [overview, setOverview] = useState<PoolOverview | null>(null)
-  const [events, setEvents] = useState<ActivityEvent[]>([])
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const [pool, activity] = await Promise.all([getPoolOverview(), getActivity().catch(() => [])])
-        if (cancelled) return
-        setOverview(pool)
-        setEvents(activity)
-        setError(null)
-      } catch (caught) {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught))
-      }
-    }
-    void load()
-    const timer = setInterval(() => void load(), 60_000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [])
+  const overviewQuery = useCached('overview', getPoolOverview, { ttl: 60_000, persist: true, refreshMs: 60_000 })
+  const eventsQuery = useCached(CREDIT_LINE_CONTRACT ? 'events' : null, getActivity, { ttl: 20_000, persist: true, refreshMs: 30_000 })
+  const overview = overviewQuery.data ?? null
+  const events = useMemo<ActivityEvent[]>(() => eventsQuery.data ?? [], [eventsQuery.data])
+  const error = overview ? null : overviewQuery.error
 
   const tryPoints = useMemo(() => cumulative(events.filter((event) => event.kind === 'payout'), (event) => Number(event.a) / 100), [events])
   const payoutBuckets = useMemo(

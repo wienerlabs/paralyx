@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, ShieldCheck } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { ArrowUpRight, Building2, ShieldCheck } from 'lucide-react'
+import { lookupDirectory, type DirectoryEntry } from '../lib/directory'
 import { Memo } from '@stellar/stellar-sdk'
 import { USDT0_TRANSFER_URL } from '../config'
 import { checkDestination, convertUsdt0ToUsdc, ensureTrustlines, formatAmount, quoteStrictSend, repayLine, sendToExchange, toStroops, blendUsdcAsset, usdt0Asset, type DestinationCheck } from '../lib/chain'
@@ -10,31 +12,65 @@ import { MotionButton } from './MotionButton'
 import { Steps } from './Steps'
 import { TokenIcon } from './TokenIcon'
 
-const exchanges = ['Paribu', 'BtcTurk', 'Binance TR', 'OKX TR', 'Bitci', 'Icrypex', 'Bitexen'] as const
+interface ExchangePreset {
+  id: string
+  name: string
+  match: string
+  logo: string
+  url: string
+  deposit?: string
+}
+
+const exchanges: ExchangePreset[] = [
+  { id: 'paribu', name: 'Paribu', match: 'paribu', logo: '/exchanges/paribu.png', url: 'https://www.paribu.com', deposit: 'GBZLHGDYMSVF4X6DYAGKLIQX3F64W3MXNDVGHKQPR226TCJ5QJ2ZQKVA' },
+  { id: 'btcturk', name: 'BtcTurk', match: 'btcturk', logo: '/exchanges/btcturk.png', url: 'https://www.btcturk.com' },
+  { id: 'binance', name: 'Binance TR', match: 'binance', logo: '/exchanges/binance.png', url: 'https://www.binance.tr' },
+  { id: 'okx', name: 'OKX TR', match: 'okx', logo: '/exchanges/okx.png', url: 'https://tr.okx.com' },
+  { id: 'bitci', name: 'Bitci', match: 'bitci', logo: '/exchanges/bitci.png', url: 'https://www.bitci.com' },
+  { id: 'icrypex', name: 'Icrypex', match: 'icrypex', logo: '/exchanges/icrypex.png', url: 'https://www.icrypex.com' },
+  { id: 'bitexen', name: 'Bitexen', match: 'bitexen', logo: '/exchanges/bitexen.png', url: 'https://www.bitexen.com' },
+]
+
+interface DestinationState {
+  address: string
+  horizon: DestinationCheck
+  directory: DirectoryEntry | null | undefined
+}
+
+function ExchangeLogo({ preset, size = 22 }: { preset: ExchangePreset | null; size?: number }) {
+  if (!preset) return <Building2 className="h-4 w-4" />
+  return <img src={preset.logo} alt="" className="rounded-full object-cover" style={{ width: size, height: size }} draggable={false} />
+}
 
 function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   const { t } = useT()
-  const [exchange, setExchange] = useState<string>(exchanges[0])
-  const [destination, setDestination] = useState('')
+  const [exchangeId, setExchangeId] = useState<string>('paribu')
+  const [destination, setDestination] = useState<string>(exchanges[0].deposit ?? '')
   const [memoType, setMemoType] = useState<'id' | 'text'>('id')
   const [memoValue, setMemoValue] = useState('')
   const [amount, setAmount] = useState('10')
   const [xlmQuote, setXlmQuote] = useState<number | null>(null)
-  const [check, setCheck] = useState<{ address: string; result: DestinationCheck } | null>(null)
+  const [check, setCheck] = useState<DestinationState | null>(null)
   const [checking, setChecking] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const flow = useFlow()
+  const preset = exchanges.find((entry) => entry.id === exchangeId) ?? null
   const numeric = Number(amount.replace(',', '.')) || 0
   const available = wallet?.blendUsdc ?? 0
   const trimmed = destination.trim()
   const validAddress = /^G[A-Z2-7]{55}$/.test(trimmed)
   const isSelf = signer ? trimmed === signer.address : false
-  const verified = check !== null && check.address === trimmed && check.result.exists && !isSelf
-  const memoRequired = verified && check.result.memoRequired
+  const current = check && check.address === trimmed ? check : null
+  const exists = current?.horizon.exists ?? false
+  const directory = current?.directory
+  const mismatch = Boolean(preset && directory && directory.domain && !directory.domain.toLowerCase().includes(preset.match))
+  const verified = exists && !isSelf && !mismatch
+  const memoRequired = exists && ((current?.horizon.memoRequired ?? false) || (directory?.tags.includes('memo-required') ?? false))
   const memoBytes = new TextEncoder().encode(memoValue.trim()).length
   const validMemo = memoType === 'id' ? /^\d+$/.test(memoValue.trim()) : memoValue.trim().length > 0 && memoBytes <= 28
   const minXlm = xlmQuote !== null ? xlmQuote * 0.99 : null
   const valid = Boolean(signer) && numeric > 0 && numeric <= available && validAddress && verified && validMemo && minXlm !== null && confirmed
+  const presetFilled = Boolean(preset?.deposit && trimmed === preset.deposit)
 
   useEffect(() => {
     if (numeric <= 0) return
@@ -47,18 +83,28 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   }, [numeric])
 
   useEffect(() => {
-    setCheck(null)
     setConfirmed(false)
-  }, [trimmed])
+  }, [trimmed, exchangeId])
 
-  const verify = async () => {
-    if (!validAddress) return
+  const verify = async (address: string) => {
+    if (!/^G[A-Z2-7]{55}$/.test(address)) return
     setChecking(true)
     try {
-      const result = await checkDestination(trimmed)
-      setCheck({ address: trimmed, result })
+      const [horizon, dir] = await Promise.all([checkDestination(address), lookupDirectory(address).catch(() => undefined)])
+      setCheck({ address, horizon, directory: dir })
     } finally {
       setChecking(false)
+    }
+  }
+
+  const choose = (entry: ExchangePreset | null) => {
+    setExchangeId(entry?.id ?? 'other')
+    if (entry?.deposit) {
+      setDestination(entry.deposit)
+      void verify(entry.deposit)
+    } else if (preset?.deposit && trimmed === preset.deposit) {
+      setDestination('')
+      setCheck(null)
     }
   }
 
@@ -69,7 +115,7 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
       mark(0, 'active')
       const fresh = await checkDestination(trimmed)
       if (!fresh.exists) throw new Error(t('destinationMissing'))
-      mark(0, 'done', `${exchange} · ${trimmed.slice(0, 4)}…${trimmed.slice(-4)}`)
+      mark(0, 'done', `${preset?.name ?? t('exchangeOther')} · ${trimmed.slice(0, 4)}…${trimmed.slice(-4)}`)
       mark(1, 'active')
       const memo = memoType === 'id' ? Memo.id(memoValue.trim()) : Memo.text(memoValue.trim())
       const hash = await sendToExchange(signer, numeric.toFixed(7), trimmed, memo, minXlm.toFixed(7))
@@ -81,6 +127,15 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
     })
 
   const shortAddress = validAddress ? `${trimmed.slice(0, 6)}…${trimmed.slice(-6)}` : '·'
+  const statusLine = isSelf
+    ? t('destinationIsYou')
+    : current
+      ? !current.horizon.exists
+        ? t('destinationMissing')
+        : mismatch
+          ? t('directoryMismatch')
+          : `${t('destinationOk')} · ${directory ? `${t('directoryListed')}: ${directory.name}${directory.domain ? ` (${directory.domain})` : ''}${directory.tags.length ? ` · ${directory.tags.join(', ')}` : ''}` : t('directoryNotListed')}`
+      : ''
 
   return (
     <div className="card">
@@ -92,36 +147,60 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
         <span className="pill">Mainnet</span>
       </div>
       <p className="mt-1 text-sm text-mute">{t('exchangeCashBody')}</p>
-      <div className="mt-4 grid gap-3">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label className="label">{t('exchangeName')}</label>
-            <select className="input" value={exchange} onChange={(e) => setExchange(e.target.value)}>
-              {exchanges.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-              <option value="other">{t('exchangeOther')}</option>
-            </select>
+
+      <div className="mt-4">
+        <label className="label">{t('exchangePickTitle')}</label>
+        <div className="flex flex-wrap gap-2">
+          {exchanges.map((entry) => (
+            <motion.button
+              key={entry.id}
+              type="button"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => choose(entry)}
+              className={
+                'inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition ' +
+                (exchangeId === entry.id ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink hover:border-ink')
+              }
+            >
+              <ExchangeLogo preset={entry} />
+              {entry.name}
+            </motion.button>
+          ))}
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.96 }}
+            onClick={() => choose(null)}
+            className={
+              'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ' +
+              (exchangeId === 'other' ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink hover:border-ink')
+            }
+          >
+            <Building2 className="h-4 w-4" /> {t('exchangeOther')}
+          </motion.button>
+        </div>
+        {preset ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-mute">
+            <a className="inline-flex items-center gap-1 underline" href={preset.url} target="_blank" rel="noreferrer">
+              <ExchangeLogo preset={preset} size={14} /> {t('openExchange')} <ArrowUpRight className="h-3 w-3" />
+            </a>
+            <span>{t('memoFromExchange')}</span>
           </div>
-          <div className="sm:col-span-2">
-            <label className="label">{t('exchangeAddress')}</label>
-            <div className="flex gap-2">
-              <input className="input font-mono text-sm" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="G…" spellCheck={false} />
-              <MotionButton variant="ghost" className="shrink-0" disabled={!validAddress || checking || isSelf} onClick={() => void verify()}>
-                <ShieldCheck className="h-4 w-4" /> {checking ? t('verifying') : t('verifyDestination')}
-              </MotionButton>
-            </div>
-            <div className="mt-1 text-xs text-mute">
-              {isSelf
-                ? t('destinationIsYou')
-                : check && check.address === trimmed
-                  ? check.result.exists
-                    ? `${t('destinationOk')} · ${check.result.memoRequired ? t('destinationMemoRequired') : t('destinationMemoUnknown')}`
-                    : t('destinationMissing')
-                  : ''}
-            </div>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <div>
+          <label className="label">{t('exchangeAddress')}</label>
+          <div className="flex gap-2">
+            <input className="input font-mono text-sm" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="G…" spellCheck={false} />
+            <MotionButton variant="ghost" className="shrink-0" disabled={!validAddress || checking || isSelf} onClick={() => void verify(trimmed)}>
+              <ShieldCheck className="h-4 w-4" /> {checking ? t('verifying') : t('verifyDestination')}
+            </MotionButton>
+          </div>
+          <div className={'mt-1 text-xs ' + (mismatch || (current && !current.horizon.exists) ? 'text-ink' : 'text-mute')}>
+            {presetFilled && verified ? `${t('presetFilled')} ` : ''}
+            {statusLine}
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -135,7 +214,7 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
           <div className="sm:col-span-2">
             <label className="label">{t('exchangeMemo')}</label>
             <input className="input font-mono text-sm" value={memoValue} onChange={(e) => setMemoValue(e.target.value)} spellCheck={false} />
-            <div className="mt-1 text-xs text-mute">{t('memoTypeHint')}</div>
+            <div className="mt-1 text-xs text-mute">{memoRequired ? t('destinationMemoRequired') : t('memoTypeHint')}</div>
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -174,8 +253,9 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
         </div>
         <div className="mt-1 flex justify-between gap-4">
           <span className="text-mute">{t('summaryTo')}</span>
-          <span className="break-all text-right font-mono text-xs text-ink">
-            {exchange === 'other' ? t('exchangeOther') : exchange} · {shortAddress}
+          <span className="inline-flex items-center gap-2 break-all text-right font-mono text-xs text-ink">
+            <ExchangeLogo preset={preset} size={16} />
+            {preset ? preset.name : t('exchangeOther')} · {shortAddress}
             {validMemo ? ` · memo ${memoType} ${memoValue.trim()}` : ''}
           </span>
         </div>

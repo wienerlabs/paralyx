@@ -5,6 +5,7 @@ import { CREDIT_LINE_CONTRACT, FRIENDBOT_URL, IS_MAINNET } from '../config'
 import { borrowAllowed, supplyAllowed } from '../lib/blend'
 import { PoolStatusBadge } from './PoolStatusBadge'
 import { useLivePrices } from '../lib/prices'
+import { useCached } from '../lib/store'
 import { getTryPerUsdHistory, getXlmUsdHistory } from '../lib/reflector'
 import { txLink, useFlow, type Shared } from '../lib/shared'
 import { MotionButton } from './MotionButton'
@@ -262,17 +263,8 @@ function spanLabel(points: Point[], template: string): string {
 export function Charts() {
   const { t } = useT()
   const live = useLivePrices()
-  const [tryPoints, setTryPoints] = useState<Point[]>([])
-  const [xlmPoints, setXlmPoints] = useState<Point[]>([])
-  useEffect(() => {
-    const load = () => {
-      getTryPerUsdHistory().then(setTryPoints).catch(() => setTryPoints([]))
-      getXlmUsdHistory().then(setXlmPoints).catch(() => setXlmPoints([]))
-    }
-    load()
-    const timer = setInterval(load, 60_000)
-    return () => clearInterval(timer)
-  }, [])
+  const tryPoints = useCached<Point[]>('chart:try', getTryPerUsdHistory, { ttl: 120_000, persist: true, refreshMs: 120_000 }).data ?? []
+  const xlmPoints = useCached<Point[]>('chart:xlm', getXlmUsdHistory, { ttl: 120_000, persist: true, refreshMs: 120_000 }).data ?? []
   const stamp = live.updatedAt ? `${t('live')} · ${new Date(live.updatedAt).toLocaleTimeString('tr-TR')}` : t('live')
   return (
     <>

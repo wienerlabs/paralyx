@@ -7,6 +7,8 @@ import {
   BLEND_USDC_SAC,
   CIRCLE_USDC_ISSUER,
   CREDIT_LINE_CONTRACT,
+  DEPLOY_LEDGER,
+  NETWORK_ID,
   FRIENDBOT_URL,
   HORIZON_URL,
   NETWORK_PASSPHRASE,
@@ -51,7 +53,7 @@ export interface Health {
   xlmPrice: number
 }
 
-export const pool = new RpcPool(RPC_URLS, NETWORK_PASSPHRASE, 4)
+export const pool = new RpcPool(RPC_URLS, NETWORK_PASSPHRASE, 6)
 export const server = pool.primary
 export const horizon = new Horizon.Server(HORIZON_URL)
 export const blendUsdcAsset = new Asset('USDC', BLEND_USDC_ISSUER)
@@ -114,21 +116,48 @@ export async function getPositions(user: string): Promise<RawPositions> {
   }
 }
 
+export interface RawReserve {
+  config: { c_factor: number; l_factor: number; index: number; util: number; max_util: number; r_base: number; r_one: number; r_two: number; r_three: number }
+  data: { b_rate: bigint; d_rate: bigint; b_supply: bigint; d_supply: bigint; ir_mod: bigint }
+}
+
+export interface ReserveSnapshot {
+  raw: RawReserve
+  price: number
+}
+
+const reserveSnapshots = new Map<string, { at: number; value: ReserveSnapshot; inflight: Promise<ReserveSnapshot> | null }>()
+
+export function fetchReserveRaw(asset: string): Promise<ReserveSnapshot> {
+  const cached = reserveSnapshots.get(asset)
+  if (cached && Date.now() - cached.at < 60_000) return Promise.resolve(cached.value)
+  if (cached?.inflight) return cached.inflight
+  const inflight = Promise.all([
+    simulateRead(BLEND_POOL, 'get_reserve', [addressArg(asset)]) as Promise<RawReserve>,
+    simulateRead(BLEND_ORACLE, 'lastprice', [xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Stellar'), addressArg(asset)])]) as Promise<{ price: bigint } | null>,
+  ])
+    .then(([raw, priceRaw]) => {
+      const value = { raw, price: priceRaw ? Number(priceRaw.price) / SEVEN : 0 }
+      reserveSnapshots.set(asset, { at: Date.now(), value, inflight: null })
+      return value
+    })
+    .catch((error: unknown) => {
+      reserveSnapshots.delete(asset)
+      throw error
+    })
+  reserveSnapshots.set(asset, { at: cached?.at ?? 0, value: cached?.value as ReserveSnapshot, inflight })
+  return inflight
+}
+
 async function getReserve(asset: string): Promise<ReserveView> {
-  const raw = (await simulateRead(BLEND_POOL, 'get_reserve', [addressArg(asset)])) as {
-    config: { c_factor: number; l_factor: number; index: number }
-    data: { b_rate: bigint; d_rate: bigint }
-  }
-  const priceRaw = (await simulateRead(BLEND_ORACLE, 'lastprice', [
-    xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Stellar'), addressArg(asset)]),
-  ])) as { price: bigint } | null
+  const { raw, price } = await fetchReserveRaw(asset)
   return {
     index: Number(raw.config.index),
     cFactor: Number(raw.config.c_factor) / SEVEN,
     lFactor: Number(raw.config.l_factor) / SEVEN,
     bRate: BigInt(raw.data.b_rate),
     dRate: BigInt(raw.data.d_rate),
-    price: priceRaw ? Number(priceRaw.price) / SEVEN : 0,
+    price,
   }
 }
 
@@ -417,11 +446,41 @@ function cursorLedger(cursor: string | undefined): number | null {
   return Number.isFinite(toid) ? Math.floor(toid / 4294967296) : null
 }
 
-async function collectEvents(startLedger: number): Promise<ActivityEvent[]> {
+interface EventLog {
+  lastLedger: number
+  events: ActivityEvent[]
+}
+
+const EVENT_LOG_KEY = `paralyx:${NETWORK_ID}:eventlog:${CREDIT_LINE_CONTRACT}`
+const RETENTION_LEDGERS = 17_280 * 6
+const MAX_LOGGED_EVENTS = 600
+
+function readEventLog(): EventLog | null {
+  try {
+    const raw = localStorage.getItem(EVENT_LOG_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { lastLedger: number; events: (Omit<ActivityEvent, 'a' | 'b'> & { a: string; b: string })[] }
+    return { lastLedger: parsed.lastLedger, events: parsed.events.map((event) => ({ ...event, a: BigInt(event.a), b: BigInt(event.b) })) }
+  } catch {
+    return null
+  }
+}
+
+function writeEventLog(log: EventLog): void {
+  try {
+    const events = log.events.slice(0, MAX_LOGGED_EVENTS).map((event) => ({ ...event, a: event.a.toString(), b: event.b.toString() }))
+    localStorage.setItem(EVENT_LOG_KEY, JSON.stringify({ lastLedger: log.lastLedger, events }))
+  } catch {
+    return
+  }
+}
+
+async function scanEvents(startLedger: number, latestLedger: number): Promise<{ events: ActivityEvent[]; reached: number }> {
   const filters = [{ type: 'contract' as const, contractIds: [CREDIT_LINE_CONTRACT] }]
   const collected: ActivityEvent[] = []
   let cursor: string | undefined
-  for (let page = 0; page < 12; page += 1) {
+  let reached = startLedger - 1
+  for (let page = 0; page < 20; page += 1) {
     const current = cursor
     const response = current
       ? await pool.run((s) => s.getEvents({ cursor: current, filters, limit: 200 }))
@@ -430,22 +489,37 @@ async function collectEvents(startLedger: number): Promise<ActivityEvent[]> {
       const decoded = decodeEvent(event)
       if (decoded) collected.push(decoded)
     }
-    const reached = cursorLedger(response.cursor)
-    if (!response.cursor || reached === null || reached >= response.latestLedger) break
+    const cursorAt = cursorLedger(response.cursor)
+    reached = Math.max(reached, Math.min(cursorAt ?? response.latestLedger, response.latestLedger))
+    if (!response.cursor || cursorAt === null || cursorAt >= latestLedger) {
+      reached = Math.max(reached, response.latestLedger)
+      break
+    }
     cursor = response.cursor
   }
-  return collected.reverse()
+  return { events: collected, reached }
 }
 
 export async function getActivity(): Promise<ActivityEvent[]> {
   if (!CREDIT_LINE_CONTRACT) return []
-  const latest = await pool.run((s) => s.getLatestLedger())
-  for (const span of [17_280 * 4, 17_280, 3_000]) {
-    try {
-      return await collectEvents(Math.max(1, latest.sequence - span))
-    } catch {
-      continue
+  const latest = (await pool.run((s) => s.getLatestLedger())).sequence
+  const floor = Math.max(DEPLOY_LEDGER, latest - RETENTION_LEDGERS)
+  const log = readEventLog()
+  const incremental = log !== null && log.lastLedger >= floor
+  const startLedger = incremental ? log.lastLedger + 1 : floor
+  const base = incremental ? log.events : []
+  if (startLedger > latest) return base
+  const { events, reached } = await scanEvents(startLedger, latest)
+  const seen = new Set(base.map((event) => `${event.txHash}:${event.kind}:${event.ledger}`))
+  const merged = [...base]
+  for (const event of events) {
+    const key = `${event.txHash}:${event.kind}:${event.ledger}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      merged.push(event)
     }
   }
-  return []
+  merged.sort((left, right) => right.ledger - left.ledger)
+  writeEventLog({ lastLedger: Math.max(reached, incremental ? log.lastLedger : 0), events: merged })
+  return merged
 }

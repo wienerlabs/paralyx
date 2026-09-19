@@ -12,7 +12,7 @@ export const SCALE = 1e14
 const RESOLUTION = 300
 const MAX_RECORDS = 20
 
-const mainnetPool = new RpcPool(MAINNET_RPC_URLS, MAINNET_PASSPHRASE, 3)
+const mainnetPool = new RpcPool(MAINNET_RPC_URLS, MAINNET_PASSPHRASE, 6)
 
 interface PriceRecord {
   price: bigint
@@ -37,20 +37,49 @@ async function recentPrices(contractId: string, code: string, transform: (price:
   return raw.map((record) => toPoint(record, transform)).reverse()
 }
 
+function hourlyStoreKey(code: string): string {
+  return `paralyx:reflector:${code}:hourly`
+}
+
+function readHourly(code: string): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(hourlyStoreKey(code))
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeHourly(code: string, values: Record<string, number>, keepAfter: number): void {
+  try {
+    const pruned: Record<string, number> = {}
+    for (const [stamp, value] of Object.entries(values)) if (Number(stamp) >= keepAfter) pruned[stamp] = value
+    localStorage.setItem(hourlyStoreKey(code), JSON.stringify(pruned))
+  } catch {
+    return
+  }
+}
+
 async function hourlyPrices(contractId: string, code: string, transform: (price: number) => number, hours: number): Promise<Point[]> {
   const now = Math.floor(Date.now() / 1000 / RESOLUTION) * RESOLUTION
   const stamps = Array.from({ length: hours + 1 }, (_, i) => now - (hours - i) * 3600)
-  const results = await Promise.all(
-    stamps.map(async (stamp) => {
+  const known = readHourly(code)
+  const missing = stamps.filter((stamp) => known[String(stamp)] === undefined)
+  await Promise.all(
+    missing.map(async (stamp) => {
       try {
         const record = (await readMainnet(contractId, 'price', [otherAsset(code), xdr.ScVal.scvU64(BigInt(stamp))])) as PriceRecord | null
-        return record ? { t: stamp * 1000, v: transform(Number(record.price) / SCALE) } : null
+        if (record) known[String(stamp)] = Number(record.price)
       } catch {
-        return null
+        return
       }
     }),
   )
-  return results.filter((point): point is Point => point !== null && Number.isFinite(point.v) && point.v > 0)
+  writeHourly(code, known, now - 48 * 3600)
+  return stamps
+    .filter((stamp) => known[String(stamp)] !== undefined)
+    .map((stamp) => ({ t: stamp * 1000, v: transform(known[String(stamp)] / SCALE) }))
+    .filter((point) => Number.isFinite(point.v) && point.v > 0)
 }
 
 const cache = new Map<string, { at: number; points: Point[] }>()

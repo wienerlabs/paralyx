@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { ArrowDownToLine, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { ActivityList, Charts, LineCard, WalletCard } from '../components/cards'
@@ -6,7 +6,8 @@ import { LiveMarketCard } from '../components/LiveMarketCard'
 import { MotionButton } from '../components/MotionButton'
 import { TokenIcon } from '../components/TokenIcon'
 import { hourlyBuckets, TrendCard } from '../components/TrendCard'
-import { getPoolOverview, type PoolOverview } from '../lib/blend'
+import { getPoolOverview } from '../lib/blend'
+import { useCached } from '../lib/store'
 import { IS_MAINNET } from '../config'
 import { useT } from '../lib/i18n'
 import { useLivePrices } from '../lib/prices'
@@ -19,14 +20,7 @@ export function Dashboard() {
   const { address, openConnect } = useWallet()
   const navigate = useNavigate()
   const live = useLivePrices()
-  const [overview, setOverview] = useState<PoolOverview | null>(null)
-
-  useEffect(() => {
-    const load = () => getPoolOverview().then(setOverview).catch(() => undefined)
-    void load()
-    const timer = setInterval(() => void load(), 60_000)
-    return () => clearInterval(timer)
-  }, [])
+  const overview = useCached('overview', getPoolOverview, { ttl: 60_000, persist: true, refreshMs: 60_000 }).data ?? null
 
   const lineBuckets = useMemo(
     () => hourlyBuckets(shared.allEvents.filter((event) => event.kind === 'opened').map((event) => ({ closedAt: event.closedAt, value: 1 }))),

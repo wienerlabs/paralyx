@@ -17,6 +17,7 @@ export interface Network {
   explorerTx: string
   explorerContract: string
   creditLine: string
+  deployLedger: number
   pool: string
   oracle: string
   xlmSac: string
@@ -43,6 +44,7 @@ export const NETWORKS: Record<NetworkId, Network> = {
     explorerTx: 'https://stellar.expert/explorer/testnet/tx/',
     explorerContract: 'https://stellar.expert/explorer/testnet/contract/',
     creditLine: 'CDZ22YMZKGQZVHJKRJITRZREFKCTCURUKRC63G7ABIPO6SBHXTXL5Z4B',
+    deployLedger: 4_760_100,
     pool: 'CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF',
     oracle: 'CAZOKR2Y5E2OSWSIBRVZMJ47RUTQPIGVWSAQ2UISGAVC46XKPGDG5PKI',
     xlmSac: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
@@ -70,6 +72,7 @@ export const NETWORKS: Record<NetworkId, Network> = {
     explorerTx: 'https://stellar.expert/explorer/public/tx/',
     explorerContract: 'https://stellar.expert/explorer/public/contract/',
     creditLine: 'CDCYHJPSXA6YT5HWXOWN5R6NL2BMD5PCIXGPBVOU2C4MJHFVV6LC7ITC',
+    deployLedger: 64_511_400,
     pool: 'CAJJZSGMMM3PD7N33TAPHGBUGTB43OC73HVIK2L2G6BNGGGYOSSYBXBD',
     oracle: 'CCVTVW2CVA7JLH4ROQGP3CU4T3EXVCK66AZGSM4MUQPXAI4QHCZPOATS',
     xlmSac: 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA',
@@ -118,6 +121,7 @@ export const EXPLORER_TX = NETWORK.explorerTx
 export const EXPLORER_CONTRACT = NETWORK.explorerContract
 
 export const CREDIT_LINE_CONTRACT = NETWORK.creditLine
+export const DEPLOY_LEDGER = NETWORK.deployLedger
 export const BLEND_POOL = NETWORK.pool
 export const BLEND_ORACLE = NETWORK.oracle
 export const XLM_SAC = NETWORK.xlmSac
