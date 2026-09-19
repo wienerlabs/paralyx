@@ -1,11 +1,10 @@
-import { Account, Address, BASE_FEE, Contract, Keypair, TransactionBuilder, rpc, scValToNative, xdr } from '@stellar/stellar-sdk'
-import { BLEND_ORACLE, BLEND_POOL, CREDIT_LINE_CONTRACT, NETWORK, NETWORK_PASSPHRASE, RPC_URL } from '../config'
+import { Address, xdr } from '@stellar/stellar-sdk'
+import { BLEND_ORACLE, BLEND_POOL, CREDIT_LINE_CONTRACT, NETWORK } from '../config'
 import type { TokenSymbol } from '../components/TokenIcon'
+import { pool as rpcPool } from './chain'
 
-const server = new rpc.Server(RPC_URL)
 const SEVEN = 10_000_000
 const TWELVE = 1_000_000_000_000
-const readSource = new Account(Keypair.random().publicKey(), '0')
 
 const reserveList: { asset: string; symbol: TokenSymbol; label: string }[] = NETWORK.reserves
 
@@ -34,15 +33,8 @@ export interface PoolOverview {
   backstopRate: number
 }
 
-async function read(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
-  if (!contractId) throw new Error('contract not deployed on this network')
-  const tx = new TransactionBuilder(readSource, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
-    .addOperation(new Contract(contractId).call(method, ...args))
-    .setTimeout(30)
-    .build()
-  const sim = await server.simulateTransaction(tx)
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) throw new Error(`read failed: ${method}`)
-  return scValToNative(sim.result.retval)
+function read(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
+  return rpcPool.simulate(contractId, method, args)
 }
 
 interface RawReserve {

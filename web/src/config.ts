@@ -11,6 +11,7 @@ export interface Network {
   label: string
   passphrase: string
   rpcUrl: string
+  rpcUrls: string[]
   horizonUrl: string
   friendbotUrl: string | null
   explorerTx: string
@@ -36,6 +37,7 @@ export const NETWORKS: Record<NetworkId, Network> = {
     label: 'Testnet',
     passphrase: 'Test SDF Network ; September 2015',
     rpcUrl: 'https://soroban-testnet.stellar.org',
+    rpcUrls: ['https://soroban-testnet.stellar.org'],
     horizonUrl: 'https://horizon-testnet.stellar.org',
     friendbotUrl: 'https://friendbot.stellar.org',
     explorerTx: 'https://stellar.expert/explorer/testnet/tx/',
@@ -61,7 +63,8 @@ export const NETWORKS: Record<NetworkId, Network> = {
     id: 'mainnet',
     label: 'Mainnet',
     passphrase: 'Public Global Stellar Network ; September 2015',
-    rpcUrl: 'https://mainnet.sorobanrpc.com',
+    rpcUrl: 'https://soroban-rpc.creit.tech',
+    rpcUrls: ['https://soroban-rpc.creit.tech', 'https://mainnet.sorobanrpc.com'],
     horizonUrl: 'https://horizon.stellar.org',
     friendbotUrl: null,
     explorerTx: 'https://stellar.expert/explorer/public/tx/',
@@ -107,6 +110,8 @@ export const IS_MAINNET = NETWORK.id === 'mainnet'
 
 export const NETWORK_PASSPHRASE = NETWORK.passphrase
 export const RPC_URL = NETWORK.rpcUrl
+export const RPC_URLS = NETWORK.rpcUrls
+export const MAINNET_RPC_URLS = NETWORKS.mainnet.rpcUrls
 export const HORIZON_URL = NETWORK.horizonUrl
 export const FRIENDBOT_URL = NETWORK.friendbotUrl ?? ''
 export const EXPLORER_TX = NETWORK.explorerTx

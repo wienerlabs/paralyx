@@ -1,7 +1,8 @@
-import { Account, BASE_FEE, Contract, Keypair, TransactionBuilder, rpc, scValToNative, xdr } from '@stellar/stellar-sdk'
+import { xdr } from '@stellar/stellar-sdk'
 import type { Point } from '../components/PriceChart'
+import { MAINNET_RPC_URLS } from '../config'
+import { RpcPool } from './rpc'
 
-const MAINNET_RPC = 'https://mainnet.sorobanrpc.com'
 export const MAINNET_HORIZON = 'https://horizon.stellar.org'
 const MAINNET_PASSPHRASE = 'Public Global Stellar Network ; September 2015'
 export const FX_ORACLE = 'CBKGPWGKSKZF52CFHMTRR23TBWTPMRDIYZ4O2P5VS65BMHYH4DXMCJZC'
@@ -11,22 +12,15 @@ export const SCALE = 1e14
 const RESOLUTION = 300
 const MAX_RECORDS = 20
 
-const server = new rpc.Server(MAINNET_RPC)
-const source = new Account(Keypair.random().publicKey(), '0')
+const mainnetPool = new RpcPool(MAINNET_RPC_URLS, MAINNET_PASSPHRASE, 3)
 
 interface PriceRecord {
   price: bigint
   timestamp: bigint
 }
 
-export async function readMainnet(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
-  const tx = new TransactionBuilder(source, { fee: BASE_FEE, networkPassphrase: MAINNET_PASSPHRASE })
-    .addOperation(new Contract(contractId).call(method, ...args))
-    .setTimeout(30)
-    .build()
-  const sim = await server.simulateTransaction(tx)
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) throw new Error(`reflector read failed: ${method}`)
-  return scValToNative(sim.result.retval)
+export function readMainnet(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
+  return mainnetPool.simulate(contractId, method, args)
 }
 
 export function otherAsset(code: string): xdr.ScVal {

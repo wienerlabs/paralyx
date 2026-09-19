@@ -1,19 +1,5 @@
-import {
-  Account,
-  Address,
-  Asset,
-  BASE_FEE,
-  Contract,
-  Horizon,
-  Keypair,
-  Memo,
-  Operation,
-  TransactionBuilder,
-  nativeToScVal,
-  rpc,
-  scValToNative,
-  xdr,
-} from '@stellar/stellar-sdk'
+import { Address, Asset, Contract, Horizon, Memo, Operation, TransactionBuilder, nativeToScVal, rpc, scValToNative, xdr } from '@stellar/stellar-sdk'
+import { RpcPool } from './rpc'
 import {
   BLEND_ORACLE,
   BLEND_POOL,
@@ -24,7 +10,7 @@ import {
   FRIENDBOT_URL,
   HORIZON_URL,
   NETWORK_PASSPHRASE,
-  RPC_URL,
+  RPC_URLS,
   SAFETY_BUFFER,
   USDT0_ISSUER,
   XLM_SAC,
@@ -65,15 +51,16 @@ export interface Health {
   xlmPrice: number
 }
 
-export const server = new rpc.Server(RPC_URL)
+export const pool = new RpcPool(RPC_URLS, NETWORK_PASSPHRASE, 4)
+export const server = pool.primary
 export const horizon = new Horizon.Server(HORIZON_URL)
 export const blendUsdcAsset = new Asset('USDC', BLEND_USDC_ISSUER)
 export const circleUsdcAsset = new Asset('USDC', CIRCLE_USDC_ISSUER)
 export const usdt0Asset = USDT0_ISSUER ? new Asset('USDT0', USDT0_ISSUER) : null
-const readSource = new Account(Keypair.random().publicKey(), '0')
 
 const SEVEN = 10_000_000
 const TWELVE = 1_000_000_000_000
+const INCLUSION_FEE = '2000'
 
 export function toStroops(amount: string | number): bigint {
   const [whole, fraction = ''] = String(amount).trim().replace(',', '.').split('.')
@@ -99,17 +86,8 @@ function i128Arg(value: bigint): xdr.ScVal {
   return nativeToScVal(value, { type: 'i128' })
 }
 
-async function simulateRead(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
-  if (!contractId) throw new Error('contract not deployed on this network')
-  const tx = new TransactionBuilder(readSource, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
-    .addOperation(new Contract(contractId).call(method, ...args))
-    .setTimeout(30)
-    .build()
-  const sim = await server.simulateTransaction(tx)
-  if (!rpc.Api.isSimulationSuccess(sim)) {
-    throw new Error(`simulation failed for ${method}: ${'error' in sim ? sim.error : 'unknown'}`)
-  }
-  return sim.result ? scValToNative(sim.result.retval) : undefined
+function simulateRead(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
+  return pool.simulate(contractId, method, args)
 }
 
 export async function getLine(user: string): Promise<Line | null> {
@@ -196,7 +174,7 @@ export function previewBorrowable(collateralXlm: number, xlm: ReserveView, usdc:
 
 async function waitForTransaction(hash: string): Promise<rpc.Api.GetTransactionResponse> {
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    const response = await server.getTransaction(hash)
+    const response = await pool.run((s) => s.getTransaction(hash))
     if (response.status !== rpc.Api.GetTransactionStatus.NOT_FOUND) return response
     await new Promise((resolve) => setTimeout(resolve, 1500))
   }
@@ -204,15 +182,15 @@ async function waitForTransaction(hash: string): Promise<rpc.Api.GetTransactionR
 }
 
 export async function invokeCreditLine(signer: Signer, method: string, args: xdr.ScVal[]): Promise<string> {
-  const account = await server.getAccount(signer.address)
-  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
+  const account = await pool.run((s) => s.getAccount(signer.address))
+  const tx = new TransactionBuilder(account, { fee: INCLUSION_FEE, networkPassphrase: NETWORK_PASSPHRASE })
     .addOperation(new Contract(CREDIT_LINE_CONTRACT).call(method, ...args))
     .setTimeout(180)
     .build()
-  const prepared = await server.prepareTransaction(tx)
+  const prepared = await pool.run((s) => s.prepareTransaction(tx))
   const signedXdr = await signer.sign(prepared.toXDR())
   const signed = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE)
-  const sent = await server.sendTransaction(signed)
+  const sent = await pool.run((s) => s.sendTransaction(signed))
   if (sent.status === 'ERROR') {
     throw new Error(`send failed: ${sent.errorResult?.toXDR('base64') ?? 'unknown'}`)
   }
@@ -429,9 +407,10 @@ async function collectEvents(startLedger: number): Promise<ActivityEvent[]> {
   const collected: ActivityEvent[] = []
   let cursor: string | undefined
   for (let page = 0; page < 12; page += 1) {
-    const response = cursor
-      ? await server.getEvents({ cursor, filters, limit: 200 })
-      : await server.getEvents({ startLedger, filters, limit: 200 })
+    const current = cursor
+    const response = current
+      ? await pool.run((s) => s.getEvents({ cursor: current, filters, limit: 200 }))
+      : await pool.run((s) => s.getEvents({ startLedger, filters, limit: 200 }))
     for (const event of response.events) {
       const decoded = decodeEvent(event)
       if (decoded) collected.push(decoded)
@@ -444,7 +423,8 @@ async function collectEvents(startLedger: number): Promise<ActivityEvent[]> {
 }
 
 export async function getActivity(): Promise<ActivityEvent[]> {
-  const latest = await server.getLatestLedger()
+  if (!CREDIT_LINE_CONTRACT) return []
+  const latest = await pool.run((s) => s.getLatestLedger())
   for (const span of [17_280 * 4, 17_280, 3_000]) {
     try {
       return await collectEvents(Math.max(1, latest.sequence - span))
