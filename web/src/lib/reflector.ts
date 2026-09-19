@@ -3,6 +3,23 @@ import type { Point } from '../components/PriceChart'
 import { MAINNET_RPC_URLS } from '../config'
 import { RpcPool } from './rpc'
 
+export interface Candle {
+  t: number
+  o: number
+  h: number
+  l: number
+  c: number
+  v: number
+}
+
+export type XlmRange = '24h' | '7d' | '30d'
+
+const XLM_RANGES: Record<XlmRange, { resolution: number; span: number }> = {
+  '24h': { resolution: 900_000, span: 24 * 3_600_000 },
+  '7d': { resolution: 3_600_000, span: 7 * 86_400_000 },
+  '30d': { resolution: 86_400_000, span: 30 * 86_400_000 },
+}
+
 export const MAINNET_HORIZON = 'https://horizon.stellar.org'
 const MAINNET_PASSPHRASE = 'Public Global Stellar Network ; September 2015'
 export const FX_ORACLE = 'CBKGPWGKSKZF52CFHMTRR23TBWTPMRDIYZ4O2P5VS65BMHYH4DXMCJZC'
@@ -101,30 +118,35 @@ export function getTryPerUsdHistory(): Promise<Point[]> {
   })
 }
 
-export function getXlmUsdHistory(): Promise<Point[]> {
-  return cached('xlm', async () => {
-    try {
-      const end = Date.now()
-      const start = end - 24 * 3600 * 1000
-      const params = new URLSearchParams({
-        base_asset_type: 'native',
-        counter_asset_type: 'credit_alphanum4',
-        counter_asset_code: 'USDC',
-        counter_asset_issuer: MAINNET_USDC_ISSUER,
-        resolution: '900000',
-        start_time: String(start),
-        end_time: String(end),
-        limit: '100',
-        order: 'asc',
-      })
-      const response = await fetch(`${MAINNET_HORIZON}/trade_aggregations?${params}`)
-      if (!response.ok) throw new Error('horizon aggregation failed')
-      const body = (await response.json()) as { _embedded: { records: { timestamp: string; close: string }[] } }
-      const points = body._embedded.records.map((record) => ({ t: Number(record.timestamp), v: Number(record.close) }))
-      if (points.length >= 6) return points
-    } catch {
-      return recentPrices(MARKET_ORACLE, 'XLM', (price) => price)
-    }
-    return recentPrices(MARKET_ORACLE, 'XLM', (price) => price)
+const candleCache = new Map<string, { at: number; candles: Candle[] }>()
+
+export async function getXlmCandles(range: XlmRange): Promise<Candle[]> {
+  const hit = candleCache.get(range)
+  if (hit && Date.now() - hit.at < 120_000) return hit.candles
+  const { resolution, span } = XLM_RANGES[range]
+  const end = Math.floor(Date.now() / resolution) * resolution
+  const start = end - span
+  const params = new URLSearchParams({
+    base_asset_type: 'native',
+    counter_asset_type: 'credit_alphanum4',
+    counter_asset_code: 'USDC',
+    counter_asset_issuer: MAINNET_USDC_ISSUER,
+    resolution: String(resolution),
+    start_time: String(start),
+    end_time: String(end + resolution),
+    limit: '200',
+    order: 'asc',
   })
+  const response = await fetch(`${MAINNET_HORIZON}/trade_aggregations?${params}`)
+  if (!response.ok) throw new Error('horizon aggregation failed')
+  const body = (await response.json()) as { _embedded: { records: { timestamp: string; open: string; high: string; low: string; close: string; base_volume: string }[] } }
+  const candles = body._embedded.records
+    .map((record) => ({ t: Number(record.timestamp), o: Number(record.open), h: Number(record.high), l: Number(record.low), c: Number(record.close), v: Number(record.base_volume) }))
+    .filter((candle) => Number.isFinite(candle.c) && candle.c > 0)
+  candleCache.set(range, { at: Date.now(), candles })
+  return candles
+}
+
+export function getXlmUsdHistory(): Promise<Point[]> {
+  return getXlmCandles('24h').then((candles) => candles.map((candle) => ({ t: candle.t, v: candle.c })))
 }

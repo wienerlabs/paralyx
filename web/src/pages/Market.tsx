@@ -14,9 +14,10 @@ function cumulative(events: ActivityEvent[], pick: (event: ActivityEvent) => num
   let running = 0
   const points = ordered.map((event) => {
     running += pick(event)
-    return { t: event.ledger, v: running }
+    return { t: event.closedAt || event.ledger * 5000, v: running }
   })
-  if (points.length === 1) points.unshift({ t: points[0].t - 1, v: 0 })
+  if (points.length === 1) points.unshift({ t: points[0].t - 3_600_000, v: 0 })
+  if (points.length > 0) points.push({ t: Date.now(), v: points[points.length - 1].v })
   return points
 }
 
@@ -163,7 +164,8 @@ export function Market() {
             points={tryPoints}
             format={(value) => `₺${formatAmount(value)}`}
             icon={<TokenIcon symbol="TRY" size={32} />}
-            footer=""
+            stepped
+            dense={false}
           />
           <PriceChart
             title={t('cumulativeUsdc')}
@@ -171,7 +173,8 @@ export function Market() {
             points={usdcPoints}
             format={(value) => `${formatAmount(value)} USDC`}
             icon={<TokenIcon symbol="USDC" size={32} />}
-            footer=""
+            stepped
+            dense={false}
           />
         </div>
       </section>

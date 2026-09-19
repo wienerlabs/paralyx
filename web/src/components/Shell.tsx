@@ -6,7 +6,7 @@ import { CREDIT_LINE_CONTRACT, EXPLORER_CONTRACT, IS_MAINNET, NETWORK_ID, switch
 import { getPoolOverview } from '../lib/blend'
 import { getActivity, getLineCount } from '../lib/chain'
 import { useT, type DictKey } from '../lib/i18n'
-import { getTryPerUsdHistory, getXlmUsdHistory } from '../lib/reflector'
+import { getTryPerUsdHistory, getXlmCandles } from '../lib/reflector'
 import { load, useInflight } from '../lib/store'
 import { useTheme } from '../lib/theme'
 import { useWallet } from '../lib/wallet'
@@ -48,7 +48,7 @@ function prefetch(path: string): void {
   }
   if (path === '/') {
     void load('chart:try', getTryPerUsdHistory, { ttl: 120_000, persist: true }).catch(() => undefined)
-    void load('chart:xlm', getXlmUsdHistory, { ttl: 120_000, persist: true }).catch(() => undefined)
+    void load('chart:xlm:24h', () => getXlmCandles('24h'), { ttl: 120_000, persist: true }).catch(() => undefined)
   }
 }
 

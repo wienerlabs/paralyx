@@ -6,7 +6,7 @@ import { borrowAllowed, supplyAllowed } from '../lib/blend'
 import { PoolStatusBadge } from './PoolStatusBadge'
 import { useLivePrices } from '../lib/prices'
 import { useCached } from '../lib/store'
-import { getTryPerUsdHistory, getXlmUsdHistory } from '../lib/reflector'
+import { getTryPerUsdHistory, getXlmCandles, type Candle, type XlmRange } from '../lib/reflector'
 import { txLink, useFlow, type Shared } from '../lib/shared'
 import { MotionButton } from './MotionButton'
 import { PriceChart, type Point } from './PriceChart'
@@ -254,41 +254,48 @@ export function ActivityList({ events, title }: { events: ActivityEvent[]; title
   )
 }
 
-function spanLabel(points: Point[], template: string): string {
-  if (points.length < 2) return ''
-  const hours = Math.max(1, Math.round((points[points.length - 1].t - points[0].t) / 3_600_000))
-  return template.replace('{h}', String(hours))
-}
-
 export function Charts() {
   const { t } = useT()
   const live = useLivePrices()
-  const tryPoints = useCached<Point[]>('chart:try', getTryPerUsdHistory, { ttl: 120_000, persist: true, refreshMs: 120_000 }).data ?? []
-  const xlmPoints = useCached<Point[]>('chart:xlm', getXlmUsdHistory, { ttl: 120_000, persist: true, refreshMs: 120_000 }).data ?? []
+  const [xlmRange, setXlmRange] = useState<XlmRange>('24h')
+  const tryQuery = useCached<Point[]>('chart:try', getTryPerUsdHistory, { ttl: 120_000, persist: true, refreshMs: 120_000 })
+  const xlmQuery = useCached<Candle[]>(`chart:xlm:${xlmRange}`, () => getXlmCandles(xlmRange), { ttl: 120_000, persist: true, refreshMs: 120_000 })
   const stamp = live.updatedAt ? `${t('live')} · ${new Date(live.updatedAt).toLocaleTimeString('tr-TR')}` : t('live')
+  const ranges = [
+    { id: '24h', label: t('range24h') },
+    { id: '7d', label: t('range7d') },
+    { id: '30d', label: t('range30d') },
+  ]
   return (
     <>
       <PriceChart
         title={t('chartTry')}
-        subtitle={t('chartTrySub')}
-        points={tryPoints}
+        subtitle={t('chartTrySub24')}
+        points={tryQuery.data ?? []}
         format={(value) => `₺${formatAmount(value)}`}
         icon={<TokenIcon symbol="TRY" size={32} />}
-        footer={spanLabel(tryPoints, t('lastHours'))}
         live={live.tryPerUsd}
         liveLabel={stamp}
+        loading={tryQuery.loading}
+        precision={2}
       />
       <PriceChart
         title={t('chartXlm')}
-        subtitle={t('chartXlmSub')}
-        points={xlmPoints}
+        subtitle={t('chartXlmSubRange')}
+        points={[]}
+        candles={xlmQuery.data ?? []}
         format={(value) => `$${formatAmount(value, 4)}`}
         icon={<TokenIcon symbol="XLM" size={32} />}
-        footer={spanLabel(xlmPoints, t('lastHours'))}
         live={live.xlmUsd}
         liveLabel={stamp}
+        ranges={ranges}
+        range={xlmRange}
+        onRange={(id) => setXlmRange(id as XlmRange)}
+        allowCandles
+        loading={xlmQuery.loading}
+        precision={4}
+        dense={xlmRange === '24h'}
       />
     </>
   )
 }
-

@@ -22,6 +22,8 @@
   --color-accent-strong: #c2c6fa;
   --color-accent-soft: #eef0ff;
   --color-on-accent: #111111;
+  --color-chart: #7b81ee;
+  --color-chart-down: #9a9aa5;
   --radius-card: 1.5rem;
 }
 
@@ -36,6 +38,8 @@ html.dark {
   --color-accent-strong: #e4e6fd;
   --color-accent-soft: #23254a;
   --color-on-accent: #111111;
+  --color-chart: #d9dbfc;
+  --color-chart-down: #6b6b78;
   color-scheme: dark;
 }
 
