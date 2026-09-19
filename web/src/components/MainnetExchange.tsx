@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowUpRight, Banknote, Building2, ShieldCheck } from 'lucide-react'
+import { ArrowUpRight, Banknote, Bookmark, BookmarkCheck, Building2, ShieldCheck, X } from 'lucide-react'
 import { Asset, Memo } from '@stellar/stellar-sdk'
-import { USDT0_TRANSFER_URL } from '../config'
+import { USDT0_TRANSFER_URL, type SavedAccount } from '../config'
 import { blendUsdcAsset, checkDestination, convertUsdt0ToUsdc, ensureTrustlines, formatAmount, quoteStrictSend, repayLine, sendToExchange, toStroops, usdt0Asset, type DestinationCheck } from '../lib/chain'
 import { lookupDirectory, type DirectoryEntry } from '../lib/directory'
 import { addHistory } from '../lib/history'
+import { removeAccount, saveAccount, useSavedAccounts } from '../lib/savedAccounts'
 import { useT } from '../lib/i18n'
 import { txLink, useFlow, type Shared } from '../lib/shared'
 import { MotionButton } from './MotionButton'
@@ -29,10 +30,19 @@ interface ExchangePreset {
   logo: string
   url: string
   deposit?: string
+  knownDeposits?: string[]
 }
 
 const exchanges: ExchangePreset[] = [
-  { id: 'paribu', name: 'Paribu', match: 'paribu', logo: '/exchanges/paribu.png', url: 'https://www.paribu.com', deposit: 'GBZLHGDYMSVF4X6DYAGKLIQX3F64W3MXNDVGHKQPR226TCJ5QJ2ZQKVA' },
+  {
+    id: 'paribu',
+    name: 'Paribu',
+    match: 'paribu',
+    logo: '/exchanges/paribu.png',
+    url: 'https://www.paribu.com',
+    deposit: 'GAMZLXGVGEQBBPLL7SQK4GJHBIHLMX5PHLC2WDQEGWFLENFO2NXQNAGH',
+    knownDeposits: ['GAMZLXGVGEQBBPLL7SQK4GJHBIHLMX5PHLC2WDQEGWFLENFO2NXQNAGH', 'GBZLHGDYMSVF4X6DYAGKLIQX3F64W3MXNDVGHKQPR226TCJ5QJ2ZQKVA'],
+  },
   { id: 'btcturk', name: 'BtcTurk', match: 'btcturk', logo: '/exchanges/btcturk.png', url: 'https://www.btcturk.com' },
   { id: 'binance', name: 'Binance TR', match: 'binance', logo: '/exchanges/binance.png', url: 'https://www.binance.tr' },
   { id: 'okx', name: 'OKX TR', match: 'okx', logo: '/exchanges/okx.png', url: 'https://tr.okx.com' },
@@ -90,7 +100,10 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   const [checking, setChecking] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
+  const [savedNotice, setSavedNotice] = useState(false)
+  const [activeSaved, setActiveSaved] = useState<string | null>(null)
   const flow = useFlow()
+  const savedAccounts = useSavedAccounts()
   const quoteLoader = useCallback((value: number) => quoteStrictSend(blendUsdcAsset, value.toFixed(7), Asset.native()), [])
   const xlm = useQuote(quoteLoader)
   const preset = exchanges.find((entry) => entry.id === exchangeId) ?? null
@@ -102,9 +115,10 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   const current = check && check.address === trimmed ? check : null
   const exists = current?.horizon.exists ?? false
   const directory = current?.directory
+  const knownDeposit = Boolean(preset?.knownDeposits?.includes(trimmed))
   const mismatch = Boolean(preset && directory && directory.domain && !directory.domain.toLowerCase().includes(preset.match))
   const verified = exists && !isSelf && !mismatch
-  const memoRequired = exists && ((current?.horizon.memoRequired ?? false) || (directory?.tags.includes('memo-required') ?? false))
+  const memoRequired = exists && (knownDeposit || (current?.horizon.memoRequired ?? false) || (directory?.tags.includes('memo-required') ?? false))
   const memoBytes = new TextEncoder().encode(memoValue.trim()).length
   const validMemo = memoType === 'id' ? /^\d+$/.test(memoValue.trim()) : memoValue.trim().length > 0 && memoBytes <= 28
   const minXlm = xlm.quote ? xlm.quote.value * 0.99 : null
@@ -118,6 +132,11 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   useEffect(() => {
     setConfirmed(false)
   }, [trimmed, exchangeId])
+
+  useEffect(() => {
+    const active = savedAccounts.find((account) => account.id === activeSaved)
+    if (active && (active.address !== trimmed || active.memo !== memoValue.trim())) setActiveSaved(null)
+  }, [trimmed, memoValue, activeSaved, savedAccounts])
 
   const verify = useCallback(async (address: string) => {
     if (!/^G[A-Z2-7]{55}$/.test(address)) return
@@ -143,6 +162,7 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
   const choose = (entry: ExchangePreset | null) => {
     setExchangeId(entry?.id ?? 'other')
     setReceipt(null)
+    setActiveSaved(null)
     if (entry?.deposit) {
       setDestination(entry.deposit)
       void verify(entry.deposit)
@@ -150,6 +170,24 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
       setDestination('')
       setCheck(null)
     }
+  }
+
+  const useSaved = (account: SavedAccount) => {
+    setExchangeId(account.exchangeId)
+    setDestination(account.address)
+    setMemoType(account.memoType)
+    setMemoValue(account.memo)
+    setActiveSaved(account.id)
+    setReceipt(null)
+    void verify(account.address)
+  }
+
+  const persistCurrent = () => {
+    if (!validAddress || !validMemo) return
+    const entry = saveAccount({ exchangeId: preset?.id ?? 'other', label: `${preset?.name ?? t('exchangeOther')} · ${memoValue.trim()}`, address: trimmed, memoType, memo: memoValue.trim() })
+    setActiveSaved(entry.id)
+    setSavedNotice(true)
+    setTimeout(() => setSavedNotice(false), 2000)
   }
 
   const amountError = wallet && numeric > 0 && numeric > available ? t('reasonBalance') : null
@@ -202,8 +240,9 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
         ? t('destinationMissing')
         : mismatch
           ? t('directoryMismatch')
-          : `${t('destinationOk')} · ${directory ? `${t('directoryListed')}: ${directory.name}${directory.domain ? ` (${directory.domain})` : ''}${directory.tags.length ? ` · ${directory.tags.join(', ')}` : ''}` : t('directoryNotListed')}`
+          : `${t('destinationOk')} · ${knownDeposit ? t('knownDeposit') : directory ? `${t('directoryListed')}: ${directory.name}${directory.domain ? ` (${directory.domain})` : ''}${directory.tags.length ? ` · ${directory.tags.join(', ')}` : ''}` : t('directoryNotListed')}`
       : ''
+  const activeAccount = savedAccounts.find((account) => account.id === activeSaved) ?? null
 
   return (
     <div className="space-y-4">
@@ -249,6 +288,38 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
         ) : null}
       </div>
 
+      {savedAccounts.length > 0 ? (
+        <div>
+          <label className="label">{t('savedAccounts')}</label>
+          <div className="flex flex-wrap gap-2">
+            {savedAccounts.map((account) => {
+              const accountPreset = exchanges.find((entry) => entry.id === account.exchangeId) ?? null
+              const active = account.id === activeSaved
+              return (
+                <span key={account.id} className={'inline-flex items-center gap-1 rounded-full border py-1 pl-1.5 pr-1.5 text-sm transition ' + (active ? 'border-accent bg-accent text-on-accent' : 'border-line bg-surface text-ink hover:border-accent-strong')}>
+                  <button type="button" onClick={() => useSaved(account)} className="inline-flex items-center gap-2" title={`${account.address} · memo ${account.memo}`}>
+                    <ExchangeLogo preset={accountPreset} size={20} />
+                    {active ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+                    {account.label}
+                  </button>
+                  {account.builtIn ? null : (
+                    <button type="button" onClick={() => removeAccount(account.id)} className="ml-1 rounded-full p-0.5 text-mute hover:text-ink" title={t('removeSaved')} aria-label={t('removeSaved')}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </span>
+              )
+            })}
+          </div>
+          {activeAccount ? (
+            <div className="mt-1 text-xs text-mute">
+              {t('usingSaved')}: {activeAccount.label}
+              {activeAccount.builtIn ? ` · ${t('builtInAccount')}` : ''}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div>
         <label className="label">{t('exchangeAddress')}</label>
         <div className="flex gap-2">
@@ -273,8 +344,13 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
         </div>
         <div className="sm:col-span-2">
           <label className="label">{t('exchangeMemo')}</label>
-          <input className="input font-mono text-sm" value={memoValue} onChange={(event) => onMemoChange(event.target.value)} spellCheck={false} placeholder={memoType === 'id' ? '123456789' : 'memo'} />
-          <div className="mt-1 text-xs text-mute">{memoRequired ? t('destinationMemoRequired') : t('memoTypeHint')}</div>
+          <div className="flex gap-2">
+            <input className="input font-mono text-sm" value={memoValue} onChange={(event) => onMemoChange(event.target.value)} spellCheck={false} placeholder={memoType === 'id' ? '123456789' : 'memo'} />
+            <MotionButton variant="ghost" className="shrink-0" disabled={!validAddress || !validMemo || Boolean(activeAccount)} onClick={persistCurrent} title={t('saveThisAccount')}>
+              <Bookmark className="h-4 w-4" /> {t('saveThisAccount')}
+            </MotionButton>
+          </div>
+          <div className="mt-1 text-xs text-mute">{savedNotice ? t('accountSaved') : memoRequired ? t('destinationMemoRequired') : t('memoTypeHint')}</div>
         </div>
       </div>
 

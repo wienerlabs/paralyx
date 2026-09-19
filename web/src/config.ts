@@ -142,6 +142,28 @@ export const ANCHOR_MAX_USDC = 300
 export const ANCHOR_MAX_TRY = 3000
 export const USDT0_TRANSFER_URL = 'https://usdt0.to/transfer'
 
+export interface SavedAccount {
+  id: string
+  exchangeId: string
+  label: string
+  address: string
+  memoType: 'id' | 'text'
+  memo: string
+  builtIn: boolean
+}
+
+export const OWNER_ACCOUNTS: SavedAccount[] = [
+  {
+    id: 'owner-paribu',
+    exchangeId: 'paribu',
+    label: 'Paribu · Baturalp',
+    address: 'GAMZLXGVGEQBBPLL7SQK4GJHBIHLMX5PHLC2WDQEGWFLENFO2NXQNAGH',
+    memoType: 'id',
+    memo: '826984064',
+    builtIn: true,
+  },
+]
+
 export const SCALAR_7 = 10_000_000n
 export const SCALAR_12 = 1_000_000_000_000n
 export const SAFETY_BUFFER = 0.97
