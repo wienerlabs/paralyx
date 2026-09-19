@@ -130,6 +130,7 @@ Patterns worth pointing at:
 - **Storage.** Config and the line counter live in instance storage; each user's `Line` lives in persistent storage under `DataKey::Line(user)`. Every read and write extends the TTL (14 day threshold, 60 day extension), and every entrypoint bumps the instance TTL.
 - **Events.** Typed `#[contractevent]` structs with the user as a topic, so wallets and the stats page can filter by address.
 - **Validation.** Negative amounts panic with a typed error, empty request lists are rejected before any cross-contract call, and repay or payout on a missing line fails.
+- **Line totals are requested amounts.** Blend clamps an over-sized repay or withdrawal to the real position, so the app passes amounts close to the position and the authoritative balances always come from `get_positions`.
 
 Tests (`cargo test`, 8 tests) run against a mock pool that records the forwarded requests and cover: request forwarding, auth requirement without mocked auths, rejection of empty and negative requests, aggregation on a second open, repay and withdraw forwarding, missing-line failures, payout recording and config storage.
 
@@ -147,7 +148,7 @@ Five screens behind a sidebar, all reading from chain and from the anchor, nothi
 - **Hat aç.** Wallet setup (friendbot and trustlines on testnet) and the collateral plus borrow form.
 - **Takas.** The exchange card: USDC to lira cashes out through the anchor, lira to USDC repays the line.
 
-Charts use Reflector's mainnet FX oracle for USD/TRY (hourly points, as far back as the oracle keeps history) and Stellar DEX trade aggregations for XLM/USDC. Wallet connection is a custom modal over Stellar Wallets Kit.
+Charts use Reflector's mainnet FX oracle for USD/TRY (hourly points, as far back as the oracle keeps history) and Stellar DEX trade aggregations for XLM/USDC; the live values on the dashboard poll Reflector's `lastprice` and the mainnet XLM/USDC order book every 15 seconds. Hourly trend cards bucket contract events by ledger close time. Wallet connection is a custom modal over Stellar Wallets Kit.
 
 ## Repository
 
