@@ -1,0 +1,373 @@
+import {
+  Address,
+  Asset,
+  BASE_FEE,
+  Contract,
+  Horizon,
+  Memo,
+  Operation,
+  TransactionBuilder,
+  nativeToScVal,
+  rpc,
+  scValToNative,
+  xdr,
+} from '@stellar/stellar-sdk'
+import {
+  BLEND_ORACLE,
+  BLEND_POOL,
+  BLEND_USDC_ISSUER,
+  BLEND_USDC_SAC,
+  CIRCLE_USDC_ISSUER,
+  CREDIT_LINE_CONTRACT,
+  FRIENDBOT_URL,
+  HORIZON_URL,
+  NETWORK_PASSPHRASE,
+  READ_SOURCE_ACCOUNT,
+  RPC_URL,
+  SAFETY_BUFFER,
+  XLM_SAC,
+} from '../config'
+
+export interface Signer {
+  address: string
+  sign: (xdr: string) => Promise<string>
+}
+
+export interface Line {
+  opened_at: bigint
+  updated_at: bigint
+  collateral_in: bigint
+  collateral_out: bigint
+  borrowed: bigint
+  repaid: bigint
+  payouts: number
+  payout_try: bigint
+}
+
+export interface ReserveView {
+  index: number
+  cFactor: number
+  lFactor: number
+  bRate: bigint
+  dRate: bigint
+  price: number
+}
+
+export interface Health {
+  collateralXlm: number
+  debtUsdc: number
+  collateralValueUsd: number
+  liabilityValueUsd: number
+  borrowableUsdc: number
+  healthFactor: number | null
+  xlmPrice: number
+}
+
+export const server = new rpc.Server(RPC_URL)
+export const horizon = new Horizon.Server(HORIZON_URL)
+export const blendUsdcAsset = new Asset('USDC', BLEND_USDC_ISSUER)
+export const circleUsdcAsset = new Asset('USDC', CIRCLE_USDC_ISSUER)
+
+const SEVEN = 10_000_000
+const TWELVE = 1_000_000_000_000
+
+export function toStroops(amount: string | number): bigint {
+  const [whole, fraction = ''] = String(amount).trim().replace(',', '.').split('.')
+  const digits = (fraction + '0000000').slice(0, 7)
+  const sign = whole.startsWith('-') ? -1n : 1n
+  return sign * (BigInt(whole.replace('-', '') || '0') * 10_000_000n + BigInt(digits))
+}
+
+export function fromStroops(value: bigint | number | string, decimals = 2): string {
+  const n = Number(BigInt(value)) / SEVEN
+  return n.toLocaleString('tr-TR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+}
+
+export function formatAmount(n: number, decimals = 2): string {
+  return n.toLocaleString('tr-TR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+}
+
+function addressArg(value: string): xdr.ScVal {
+  return new Address(value).toScVal()
+}
+
+function i128Arg(value: bigint): xdr.ScVal {
+  return nativeToScVal(value, { type: 'i128' })
+}
+
+async function simulateRead(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
+  const account = await server.getAccount(READ_SOURCE_ACCOUNT)
+  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
+    .addOperation(new Contract(contractId).call(method, ...args))
+    .setTimeout(30)
+    .build()
+  const sim = await server.simulateTransaction(tx)
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error(`simulation failed for ${method}: ${'error' in sim ? sim.error : 'unknown'}`)
+  }
+  return sim.result ? scValToNative(sim.result.retval) : undefined
+}
+
+export async function getLine(user: string): Promise<Line | null> {
+  const result = (await simulateRead(CREDIT_LINE_CONTRACT, 'get_line', [addressArg(user)])) as Line | null | undefined
+  return result ?? null
+}
+
+export async function getLineCount(): Promise<number> {
+  return Number(await simulateRead(CREDIT_LINE_CONTRACT, 'get_line_count', []))
+}
+
+interface RawPositions {
+  collateral: Record<string, bigint>
+  liabilities: Record<string, bigint>
+  supply: Record<string, bigint>
+}
+
+export async function getPositions(user: string): Promise<RawPositions> {
+  const result = (await simulateRead(BLEND_POOL, 'get_positions', [addressArg(user)])) as RawPositions
+  return {
+    collateral: result?.collateral ?? {},
+    liabilities: result?.liabilities ?? {},
+    supply: result?.supply ?? {},
+  }
+}
+
+async function getReserve(asset: string): Promise<ReserveView> {
+  const raw = (await simulateRead(BLEND_POOL, 'get_reserve', [addressArg(asset)])) as {
+    config: { c_factor: number; l_factor: number; index: number }
+    data: { b_rate: bigint; d_rate: bigint }
+  }
+  const priceRaw = (await simulateRead(BLEND_ORACLE, 'lastprice', [
+    xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Stellar'), addressArg(asset)]),
+  ])) as { price: bigint } | null
+  return {
+    index: Number(raw.config.index),
+    cFactor: Number(raw.config.c_factor) / SEVEN,
+    lFactor: Number(raw.config.l_factor) / SEVEN,
+    bRate: BigInt(raw.data.b_rate),
+    dRate: BigInt(raw.data.d_rate),
+    price: priceRaw ? Number(priceRaw.price) / SEVEN : 0,
+  }
+}
+
+let reserveCache: { at: number; xlm: ReserveView; usdc: ReserveView } | null = null
+
+export async function getReserves(): Promise<{ xlm: ReserveView; usdc: ReserveView }> {
+  if (reserveCache && Date.now() - reserveCache.at < 60_000) return reserveCache
+  const [xlm, usdc] = await Promise.all([getReserve(XLM_SAC), getReserve(BLEND_USDC_SAC)])
+  reserveCache = { at: Date.now(), xlm, usdc }
+  return reserveCache
+}
+
+function underlying(shares: bigint, rate: bigint): number {
+  return Number((shares * rate) / BigInt(TWELVE)) / SEVEN
+}
+
+export async function getHealth(user: string): Promise<Health> {
+  const [positions, reserves] = await Promise.all([getPositions(user), getReserves()])
+  const collateralShares = BigInt(positions.collateral[String(reserves.xlm.index)] ?? 0)
+  const debtShares = BigInt(positions.liabilities[String(reserves.usdc.index)] ?? 0)
+  const collateralXlm = underlying(collateralShares, reserves.xlm.bRate)
+  const debtUsdc = underlying(debtShares, reserves.usdc.dRate)
+  const collateralValueUsd = collateralXlm * reserves.xlm.price * reserves.xlm.cFactor
+  const liabilityValueUsd = debtUsdc * reserves.usdc.price / reserves.usdc.lFactor
+  const headroom = Math.max(0, collateralValueUsd - liabilityValueUsd)
+  const borrowableUsdc = (headroom * reserves.usdc.lFactor / reserves.usdc.price) * SAFETY_BUFFER
+  return {
+    collateralXlm,
+    debtUsdc,
+    collateralValueUsd,
+    liabilityValueUsd,
+    borrowableUsdc,
+    healthFactor: liabilityValueUsd > 0 ? collateralValueUsd / liabilityValueUsd : null,
+    xlmPrice: reserves.xlm.price,
+  }
+}
+
+export function previewBorrowable(collateralXlm: number, xlm: ReserveView, usdc: ReserveView, existing: Health): number {
+  const collateralValue = existing.collateralValueUsd + collateralXlm * xlm.price * xlm.cFactor
+  const headroom = Math.max(0, collateralValue - existing.liabilityValueUsd)
+  return (headroom * usdc.lFactor / usdc.price) * SAFETY_BUFFER
+}
+
+async function waitForTransaction(hash: string): Promise<rpc.Api.GetTransactionResponse> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const response = await server.getTransaction(hash)
+    if (response.status !== rpc.Api.GetTransactionStatus.NOT_FOUND) return response
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+  }
+  throw new Error('transaction did not settle in time')
+}
+
+export async function invokeCreditLine(signer: Signer, method: string, args: xdr.ScVal[]): Promise<string> {
+  const account = await server.getAccount(signer.address)
+  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
+    .addOperation(new Contract(CREDIT_LINE_CONTRACT).call(method, ...args))
+    .setTimeout(180)
+    .build()
+  const prepared = await server.prepareTransaction(tx)
+  const signedXdr = await signer.sign(prepared.toXDR())
+  const signed = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE)
+  const sent = await server.sendTransaction(signed)
+  if (sent.status === 'ERROR') {
+    throw new Error(`send failed: ${sent.errorResult?.toXDR('base64') ?? 'unknown'}`)
+  }
+  const settled = await waitForTransaction(sent.hash)
+  if (settled.status !== rpc.Api.GetTransactionStatus.SUCCESS) {
+    throw new Error(`transaction failed on chain: ${sent.hash}`)
+  }
+  return sent.hash
+}
+
+export function openLine(signer: Signer, collateralXlm: bigint, borrowUsdc: bigint): Promise<string> {
+  return invokeCreditLine(signer, 'open_line', [addressArg(signer.address), i128Arg(collateralXlm), i128Arg(borrowUsdc)])
+}
+
+export function repayLine(signer: Signer, repayUsdc: bigint, withdrawXlm: bigint): Promise<string> {
+  return invokeCreditLine(signer, 'repay_line', [addressArg(signer.address), i128Arg(repayUsdc), i128Arg(withdrawXlm)])
+}
+
+export function recordPayout(signer: Signer, anchorTxId: string, tryKurus: bigint): Promise<string> {
+  return invokeCreditLine(signer, 'record_payout', [
+    addressArg(signer.address),
+    nativeToScVal(anchorTxId, { type: 'string' }),
+    i128Arg(tryKurus),
+  ])
+}
+
+export interface WalletState {
+  exists: boolean
+  xlm: number
+  blendUsdc: number | null
+  circleUsdc: number | null
+}
+
+export async function getWalletState(address: string): Promise<WalletState> {
+  try {
+    const account = await horizon.loadAccount(address)
+    const find = (asset: Asset) =>
+      account.balances.find(
+        (b) => 'asset_code' in b && b.asset_code === asset.getCode() && 'asset_issuer' in b && b.asset_issuer === asset.getIssuer(),
+      )
+    const native = account.balances.find((b) => b.asset_type === 'native')
+    const blend = find(blendUsdcAsset)
+    const circle = find(circleUsdcAsset)
+    return {
+      exists: true,
+      xlm: native ? Number(native.balance) : 0,
+      blendUsdc: blend ? Number(blend.balance) : null,
+      circleUsdc: circle ? Number(circle.balance) : null,
+    }
+  } catch {
+    return { exists: false, xlm: 0, blendUsdc: null, circleUsdc: null }
+  }
+}
+
+export async function fundWithFriendbot(address: string): Promise<void> {
+  const response = await fetch(`${FRIENDBOT_URL}?addr=${encodeURIComponent(address)}`)
+  if (!response.ok) throw new Error('friendbot refused the request')
+}
+
+async function submitClassic(signer: Signer, operations: xdr.Operation[], memo?: Memo): Promise<string> {
+  const account = await horizon.loadAccount(signer.address)
+  const builder = new TransactionBuilder(account, { fee: '10000', networkPassphrase: NETWORK_PASSPHRASE })
+  operations.forEach((operation) => builder.addOperation(operation))
+  if (memo) builder.addMemo(memo)
+  const tx = builder.setTimeout(180).build()
+  const signedXdr = await signer.sign(tx.toXDR())
+  const signed = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE)
+  const result = await horizon.submitTransaction(signed)
+  return result.hash
+}
+
+export async function ensureTrustlines(signer: Signer, state: WalletState): Promise<string | null> {
+  const operations: xdr.Operation[] = []
+  if (state.blendUsdc === null) operations.push(Operation.changeTrust({ asset: blendUsdcAsset }))
+  if (state.circleUsdc === null) operations.push(Operation.changeTrust({ asset: circleUsdcAsset }))
+  if (operations.length === 0) return null
+  return submitClassic(signer, operations)
+}
+
+export async function payAnchorWithBlendUsdc(signer: Signer, amountUsdc: string, treasury: string, memoId: string): Promise<string> {
+  const operations = [
+    Operation.pathPaymentStrictSend({
+      sendAsset: blendUsdcAsset,
+      sendAmount: amountUsdc,
+      destination: signer.address,
+      destAsset: circleUsdcAsset,
+      destMin: amountUsdc,
+      path: [],
+    }),
+    Operation.payment({ destination: treasury, asset: circleUsdcAsset, amount: amountUsdc }),
+  ]
+  return submitClassic(signer, operations, Memo.id(memoId))
+}
+
+export async function convertCircleToBlendUsdc(signer: Signer, amountUsdc: string): Promise<string> {
+  return submitClassic(signer, [
+    Operation.pathPaymentStrictSend({
+      sendAsset: circleUsdcAsset,
+      sendAmount: amountUsdc,
+      destination: signer.address,
+      destAsset: blendUsdcAsset,
+      destMin: amountUsdc,
+      path: [],
+    }),
+  ])
+}
+
+export interface ActivityEvent {
+  kind: 'opened' | 'repaid' | 'payout'
+  user: string
+  ledger: number
+  txHash: string
+  a: bigint
+  b: bigint
+  anchorTxId?: string
+}
+
+export async function getActivity(): Promise<ActivityEvent[]> {
+  const latest = await server.getLatestLedger()
+  const windows = [17_280 * 6, 17_280 * 2, 17_280 / 4]
+  for (const span of windows) {
+    try {
+      const response = await server.getEvents({
+        startLedger: Math.max(1, latest.sequence - span),
+        filters: [{ type: 'contract', contractIds: [CREDIT_LINE_CONTRACT] }],
+        limit: 200,
+      })
+      return response.events
+        .map((event): ActivityEvent | null => {
+          const topics = event.topic.map((t) => scValToNative(t))
+          const kind = topics[1]
+          if (kind !== 'opened' && kind !== 'repaid' && kind !== 'payout') return null
+          const data = scValToNative(event.value) as Record<string, bigint | string>
+          const values = Object.values(data)
+          if (kind === 'payout') {
+            return {
+              kind,
+              user: String(topics[2]),
+              ledger: event.ledger,
+              txHash: event.txHash,
+              a: BigInt(data.try_amount as bigint),
+              b: 0n,
+              anchorTxId: String(data.anchor_tx_id),
+            }
+          }
+          return {
+            kind,
+            user: String(topics[2]),
+            ledger: event.ledger,
+            txHash: event.txHash,
+            a: BigInt(values[0] as bigint),
+            b: BigInt(values[1] as bigint),
+          }
+        })
+        .filter((event): event is ActivityEvent => event !== null)
+        .reverse()
+    } catch {
+      continue
+    }
+  }
+  return []
+}
