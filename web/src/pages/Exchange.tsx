@@ -1,0 +1,25 @@
+import { ExchangeCard } from '../components/ExchangeCard'
+import { LineCard } from '../components/cards'
+import { useT } from '../lib/i18n'
+import { useShared } from '../lib/useShared'
+
+export function Exchange() {
+  const { t } = useT()
+  const shared = useShared()
+  return (
+    <div>
+      <section className="pb-6">
+        <h1 className="text-3xl tracking-tight text-ink sm:text-4xl">{t('exchangeTitleLong')}</h1>
+        <p className="mt-2 max-w-2xl text-base text-mute">{t('cashBody')}</p>
+      </section>
+      <section className="grid gap-5 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <ExchangeCard {...shared} />
+        </div>
+        <div className="space-y-5 lg:col-span-2">
+          <LineCard {...shared} />
+        </div>
+      </section>
+    </div>
+  )
+}

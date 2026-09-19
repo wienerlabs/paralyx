@@ -1,34 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ANCHOR_HOME_DOMAIN, BLEND_POOL, CREDIT_LINE_CONTRACT, EXPLORER_CONTRACT } from '../config'
-import { quoteUsdcToTry } from '../lib/anchor'
-import {
-  ensureTrustlines,
-  formatAmount,
-  fromStroops,
-  fundWithFriendbot,
-  getActivity,
-  getHealth,
-  getLine,
-  getReserves,
-  getWalletState,
-  openLine,
-  previewBorrowable,
-  toStroops,
-  type ActivityEvent,
-  type Health,
-  type Line,
-  type ReserveView,
-  type WalletState,
-} from '../lib/chain'
-import { useT, type DictKey } from '../lib/i18n'
+import { useEffect, useMemo, useState } from 'react'
+import { ensureTrustlines, formatAmount, fromStroops, fundWithFriendbot, openLine, previewBorrowable, toStroops, type ActivityEvent } from '../lib/chain'
+import { useT } from '../lib/i18n'
 import { getTryPerUsdHistory, getXlmUsdHistory } from '../lib/reflector'
 import { txLink, useFlow, type Shared } from '../lib/shared'
-import { useWallet } from '../lib/wallet'
-import { ExchangeCard } from '../components/ExchangeCard'
-import { MotionButton } from '../components/MotionButton'
-import { PriceChart, type Point } from '../components/PriceChart'
-import { Steps } from '../components/Steps'
-import { TokenIcon, type TokenSymbol } from '../components/TokenIcon'
+import { MotionButton } from './MotionButton'
+import { PriceChart, type Point } from './PriceChart'
+import { Steps } from './Steps'
+import { TokenIcon, type TokenSymbol } from './TokenIcon'
 
 function Metric({ label, value, hint, symbol }: { label: string; value: string; hint?: string; symbol?: TokenSymbol }) {
   return (
@@ -43,7 +21,7 @@ function Metric({ label, value, hint, symbol }: { label: string; value: string; 
   )
 }
 
-function LineCard({ line, health, rate, wallet }: Shared) {
+export function LineCard({ line, health, rate, wallet }: Shared) {
   const { t } = useT()
   const limitTry = health && rate ? health.borrowableUsdc * rate : null
   return (
@@ -101,7 +79,7 @@ function LineCard({ line, health, rate, wallet }: Shared) {
   )
 }
 
-function WalletCard({ signer, wallet, refresh }: Shared) {
+export function WalletCard({ signer, wallet, refresh }: Shared) {
   const { t } = useT()
   const flow = useFlow()
   if (!signer || !wallet) return null
@@ -146,7 +124,7 @@ function WalletCard({ signer, wallet, refresh }: Shared) {
   )
 }
 
-function OpenCard({ signer, wallet, health, reserves, rate, refresh }: Shared) {
+export function OpenCard({ signer, wallet, health, reserves, rate, refresh }: Shared) {
   const { t } = useT()
   const [collateral, setCollateral] = useState('100')
   const [borrow, setBorrow] = useState('10')
@@ -255,7 +233,7 @@ function spanLabel(points: Point[], template: string): string {
   return template.replace('{h}', String(hours))
 }
 
-function Charts() {
+export function Charts() {
   const { t } = useT()
   const [tryPoints, setTryPoints] = useState<Point[]>([])
   const [xlmPoints, setXlmPoints] = useState<Point[]>([])
@@ -285,118 +263,3 @@ function Charts() {
   )
 }
 
-export function Home() {
-  const { t } = useT()
-  const { address, signer, openConnect } = useWallet()
-  const [wallet, setWallet] = useState<WalletState | null>(null)
-  const [line, setLine] = useState<Line | null>(null)
-  const [health, setHealth] = useState<Health | null>(null)
-  const [reserves, setReserves] = useState<{ xlm: ReserveView; usdc: ReserveView } | null>(null)
-  const [rate, setRate] = useState<number | null>(null)
-  const [events, setEvents] = useState<ActivityEvent[]>([])
-
-  const refresh = useCallback(async () => {
-    if (!address) {
-      setWallet(null)
-      setLine(null)
-      setHealth(null)
-      setEvents([])
-      return
-    }
-    const [walletState, lineState, healthState, activity] = await Promise.all([
-      getWalletState(address),
-      getLine(address).catch(() => null),
-      getHealth(address).catch(() => null),
-      getActivity().catch(() => []),
-    ])
-    setWallet(walletState)
-    setLine(lineState)
-    setHealth(healthState)
-    setEvents(activity.filter((event) => event.user === address))
-  }, [address])
-
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
-
-  useEffect(() => {
-    getReserves().then(setReserves).catch(() => setReserves(null))
-    quoteUsdcToTry(1)
-      .then((quote) => setRate(quote.buyAmount))
-      .catch(() => setRate(null))
-  }, [])
-
-  const shared: Shared = { signer, wallet, line, health, reserves, rate, refresh }
-
-  return (
-    <main className="mx-auto w-full max-w-6xl px-5 pb-20">
-      <section className="py-10 sm:py-14">
-        <span className="pill">{t('testnet')}</span>
-        <h1 className="mt-4 max-w-3xl text-4xl tracking-tight text-ink sm:text-6xl">{t('tagline')}</h1>
-        <p className="mt-4 max-w-2xl text-base text-mute sm:text-lg">{t('subtitle')}</p>
-        {!address ? (
-          <MotionButton className="mt-6" onClick={openConnect}>
-            {t('connect')}
-          </MotionButton>
-        ) : null}
-      </section>
-
-      <section className="grid gap-5 lg:grid-cols-5">
-        <div className="space-y-5 lg:col-span-2">
-          <LineCard {...shared} />
-          <Charts />
-          <ActivityList events={events} title={t('activity')} />
-        </div>
-        <div className="space-y-5 lg:col-span-3">
-          <WalletCard {...shared} />
-          <OpenCard {...shared} />
-          <ExchangeCard {...shared} />
-        </div>
-      </section>
-
-      <section className="mt-16 grid gap-5 lg:grid-cols-2">
-        <div className="card">
-          <h3 className="text-lg text-ink">{t('how')}</h3>
-          <ol className="mt-3 space-y-2 text-sm text-mute">
-            {(['how1', 'how2', 'how3', 'how4'] as DictKey[]).map((key, index) => (
-              <li key={key} className="flex gap-3">
-                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-line text-[10px] text-ink">{index + 1}</span>
-                <span>{t(key)}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="card">
-          <h3 className="text-lg text-ink">{t('integrations')}</h3>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {['Blend v2', 'TR Mock Anchor · SEP-6', 'Stellar Wallets Kit', 'Soroban', 'Reflector'].map((name) => (
-              <span key={name} className="pill">
-                {name}
-              </span>
-            ))}
-          </div>
-          <div className="mt-4 space-y-1 text-xs text-mute">
-            <div>
-              {t('contract')}:{' '}
-              <a className="underline" href={`${EXPLORER_CONTRACT}${CREDIT_LINE_CONTRACT}`} target="_blank" rel="noreferrer">
-                {CREDIT_LINE_CONTRACT.slice(0, 8)}…{CREDIT_LINE_CONTRACT.slice(-6)}
-              </a>
-            </div>
-            <div>
-              Blend:{' '}
-              <a className="underline" href={`${EXPLORER_CONTRACT}${BLEND_POOL}`} target="_blank" rel="noreferrer">
-                {BLEND_POOL.slice(0, 8)}…{BLEND_POOL.slice(-6)}
-              </a>
-            </div>
-            <div>
-              Anchor:{' '}
-              <a className="underline" href={`https://${ANCHOR_HOME_DOMAIN}`} target="_blank" rel="noreferrer">
-                {ANCHOR_HOME_DOMAIN}
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-  )
-}

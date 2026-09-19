@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
+import { ActivityList } from '../components/cards'
+import { MotionButton } from '../components/MotionButton'
+import { TokenIcon, type TokenSymbol } from '../components/TokenIcon'
 import { CREDIT_LINE_CONTRACT, EXPLORER_CONTRACT } from '../config'
 import { formatAmount, fromStroops, getActivity, getLineCount, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
-import { ActivityList } from './Home'
-import { TokenIcon, type TokenSymbol } from '../components/TokenIcon'
+import { useWallet } from '../lib/wallet'
 
-export function Stats() {
+export function Activity() {
   const { t } = useT()
+  const { address } = useWallet()
   const [count, setCount] = useState<number | null>(null)
   const [events, setEvents] = useState<ActivityEvent[]>([])
+  const [mine, setMine] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -31,6 +35,7 @@ export function Stats() {
   const xlm = opened.reduce((sum, event) => sum + event.a, 0n)
   const usdc = opened.reduce((sum, event) => sum + event.b, 0n)
   const tryPaid = payouts.reduce((sum, event) => sum + event.a, 0n)
+  const visible = mine && address ? events.filter((event) => event.user === address) : events
 
   const cards: { label: string; value: string; symbol?: TokenSymbol }[] = [
     { label: t('linesOpened'), value: count === null ? '·' : String(count) },
@@ -40,10 +45,9 @@ export function Stats() {
   ]
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 pb-20">
-      <section className="py-10">
-        <span className="pill">{t('testnet')}</span>
-        <h1 className="mt-4 text-4xl tracking-tight text-ink sm:text-5xl">{t('statsTitle')}</h1>
+    <div>
+      <section className="pb-6">
+        <h1 className="text-3xl tracking-tight text-ink sm:text-4xl">{t('activityTitle')}</h1>
         <p className="mt-2 text-sm text-mute">
           {t('contract')}:{' '}
           <a className="underline" href={`${EXPLORER_CONTRACT}${CREDIT_LINE_CONTRACT}`} target="_blank" rel="noreferrer">
@@ -62,9 +66,17 @@ export function Stats() {
           </div>
         ))}
       </section>
-      <section className="mt-6">
-        <ActivityList events={events} title={t('activity')} />
+      <section className="mt-5">
+        <div className="mb-3 flex gap-2">
+          <MotionButton variant={mine ? 'ghost' : 'primary'} onClick={() => setMine(false)}>
+            {t('everyone')}
+          </MotionButton>
+          <MotionButton variant={mine ? 'primary' : 'ghost'} disabled={!address} onClick={() => setMine(true)}>
+            {t('mine')}
+          </MotionButton>
+        </div>
+        <ActivityList events={visible} title={t('activity')} />
       </section>
-    </main>
+    </div>
   )
 }

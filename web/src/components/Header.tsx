@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Copy, LogOut } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
 import { formatAmount, getWalletState, type WalletState } from '../lib/chain'
 import { useT } from '../lib/i18n'
 import { shortAddress, useWallet } from '../lib/wallet'
 import { MotionButton } from './MotionButton'
 import { TokenIcon } from './TokenIcon'
 
-function WalletMenu() {
+export function WalletMenu() {
   const { t } = useT()
   const { address, walletName, disconnect } = useWallet()
   const [open, setOpen] = useState(false)
@@ -84,37 +83,3 @@ function WalletMenu() {
   )
 }
 
-export function Header() {
-  const { t, lang, setLang } = useT()
-  const { address, openConnect } = useWallet()
-  const link = ({ isActive }: { isActive: boolean }) =>
-    'rounded-full px-3 py-1.5 text-sm transition ' + (isActive ? 'bg-ink text-white' : 'text-mute hover:text-ink')
-  return (
-    <header className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-5">
-      <div className="flex items-center gap-4">
-        <NavLink to="/" className="text-xl tracking-tight text-ink">
-          Paralyx
-        </NavLink>
-        <nav className="flex items-center gap-1 rounded-full border border-line p-1">
-          <NavLink to="/" className={link} end>
-            {t('home')}
-          </NavLink>
-          <NavLink to="/stats" className={link}>
-            {t('stats')}
-          </NavLink>
-        </nav>
-      </div>
-      <div className="flex items-center gap-2">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.94 }}
-          onClick={() => setLang(lang === 'tr' ? 'en' : 'tr')}
-          className="rounded-full border border-line px-3 py-1.5 text-xs text-mute transition hover:border-ink hover:text-ink"
-        >
-          {lang === 'tr' ? 'EN' : 'TR'}
-        </motion.button>
-        {address ? <WalletMenu /> : <MotionButton onClick={openConnect}>{t('connect')}</MotionButton>}
-      </div>
-    </header>
-  )
-}

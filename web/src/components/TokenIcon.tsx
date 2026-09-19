@@ -1,15 +1,19 @@
-export type TokenSymbol = 'USDC' | 'XLM' | 'TRY'
+export type TokenSymbol = 'USDC' | 'XLM' | 'TRY' | 'ETH' | 'BTC'
 
 const sources: Record<TokenSymbol, string> = {
   USDC: '/tokens/usdc.svg',
   XLM: '/tokens/xlm.svg',
   TRY: '/tokens/tr.svg',
+  ETH: '/tokens/eth.svg',
+  BTC: '/tokens/btc.svg',
 }
 
 export const tokenNames: Record<TokenSymbol, string> = {
   USDC: 'USD Coin',
   XLM: 'Stellar Lumens',
   TRY: 'Türk lirası',
+  ETH: 'Wrapped Ether',
+  BTC: 'Wrapped Bitcoin',
 }
 
 export function TokenIcon({ symbol, size = 24, className = '' }: { symbol: TokenSymbol; size?: number; className?: string }) {
