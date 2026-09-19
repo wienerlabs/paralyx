@@ -147,7 +147,7 @@ export function Market() {
             {CREDIT_LINE_CONTRACT.slice(0, 8)}…{CREDIT_LINE_CONTRACT.slice(-6)}
           </a>
         </div>
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-3">
           <TrendCard
             title={t('trendPayouts')}
             subtitle={t('trendSub')}

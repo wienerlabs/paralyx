@@ -278,6 +278,7 @@ export function Charts() {
         liveLabel={stamp}
         loading={tryQuery.loading}
         precision={2}
+        minSpan={0.01}
       />
       <PriceChart
         title={t('chartXlm')}

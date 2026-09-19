@@ -32,8 +32,9 @@ export function PriceChart({
   stepped = false,
   loading = false,
   precision = 2,
-  height = 200,
+  height = 220,
   dense = true,
+  minSpan = 0,
 }: {
   title: string
   subtitle: string
@@ -53,6 +54,7 @@ export function PriceChart({
   precision?: number
   height?: number
   dense?: boolean
+  minSpan?: number
 }) {
   const { t, lang } = useT()
   const [mode, setMode] = useState<'area' | 'candles'>('area')
@@ -76,6 +78,7 @@ export function PriceChart({
   const hoverTime = hover ? new Date(hover.time).toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null
   const up = stats ? stats.change >= 0 : true
   const hasData = series.length > 0
+  const changeLabel = stats ? `${stats.change > 0.005 ? '+' : stats.change < -0.005 ? '-' : ''}${formatAmount(Math.abs(stats.change))}%` : ''
 
   return (
     <div className="card">
@@ -97,11 +100,10 @@ export function PriceChart({
               <span>{hoverTime}</span>
             ) : (
               <>
-                {stats ? (
+                {stats && !stepped ? (
                   <span className={'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 ' + (up ? 'bg-accent-soft text-ink' : 'bg-soft text-mute')}>
                     {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                    {up ? '+' : ''}
-                    {stats.change.toFixed(2)}%
+                    {changeLabel}
                   </span>
                 ) : null}
                 {showLive && liveLabel ? <span>{liveLabel}</span> : null}
@@ -140,7 +142,7 @@ export function PriceChart({
 
       <div className="relative mt-3">
         {hasData ? (
-          <PriceArea points={points} candles={candles} mode={allowCandles ? mode : 'area'} stepped={stepped} height={height} format={format} precision={precision} locale={lang === 'tr' ? 'tr-TR' : 'en-US'} dense={dense} onHover={setHover} />
+          <PriceArea points={points} candles={candles} mode={allowCandles ? mode : 'area'} stepped={stepped} height={height} format={format} precision={precision} locale={lang === 'tr' ? 'tr-TR' : 'en-US'} dense={dense} minSpan={minSpan} onHover={setHover} />
         ) : (
           <div className="flex items-center justify-center rounded-2xl bg-soft text-xs text-mute" style={{ height }}>
             {loading ? <span className="live-dot" /> : t('noData')}
@@ -184,8 +186,8 @@ export function PriceChart({
             <div className="text-ink">{format(stats.avg)}</div>
           </div>
           <div>
-            <div className="text-mute">{stats.volume !== null ? t('statVolume') : t('statChange')}</div>
-            <div className="text-ink">{stats.volume !== null ? `${formatAmount(stats.volume / 1_000_000, 2)}M XLM` : `${stats.change >= 0 ? '+' : ''}${stats.change.toFixed(2)}%`}</div>
+            <div className="text-mute">{stats.volume !== null ? t('statVolume') : stepped ? t('totalLabel') : t('statChange')}</div>
+            <div className="text-ink">{stats.volume !== null ? `${formatAmount(stats.volume / 1_000_000, 2)}M XLM` : stepped ? format(stats.last) : changeLabel}</div>
           </div>
         </div>
       ) : null}

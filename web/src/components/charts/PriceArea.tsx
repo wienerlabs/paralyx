@@ -77,6 +77,7 @@ export function PriceArea({
   precision = 2,
   locale = 'tr-TR',
   dense = true,
+  minSpan = 0,
   onHover,
 }: {
   points?: AreaPoint[]
@@ -88,6 +89,7 @@ export function PriceArea({
   precision?: number
   locale?: string
   dense?: boolean
+  minSpan?: number
   onHover?: (info: HoverInfo | null) => void
 }) {
   const container = useRef<HTMLDivElement>(null)
@@ -205,6 +207,14 @@ export function PriceArea({
     const minMove = 1 / 10 ** precision
     const priceFormat = { type: 'custom' as const, formatter: (price: number) => formatRef.current(price), minMove }
     candleMap.current = new Map()
+    const autoscaleInfoProvider = (original: () => { priceRange: { minValue: number; maxValue: number } | null; margins?: { above: number; below: number } } | null) => {
+      const info = original()
+      if (!info || !info.priceRange || minSpan <= 0) return info
+      const { minValue, maxValue } = info.priceRange
+      const mid = (minValue + maxValue) / 2
+      const span = Math.max(maxValue - minValue, Math.abs(mid) * minSpan)
+      return { ...info, priceRange: { minValue: mid - span / 2, maxValue: mid + span / 2 } }
+    }
 
     if (mode === 'candles' && candles && candles.length > 0) {
       const series = chart.addSeries(CandlestickSeries, {
@@ -258,6 +268,7 @@ export function PriceArea({
         crosshairMarkerBorderColor: palette.surface,
         crosshairMarkerBorderWidth: 2,
         priceFormat,
+        autoscaleInfoProvider,
       })
       const sorted = [...source].sort((a, b) => a.t - b.t)
       const seen = new Set<number>()
@@ -271,7 +282,7 @@ export function PriceArea({
       seriesRef.current = series
     }
     chart.timeScale().fitContent()
-  }, [points, candles, mode, stepped, precision])
+  }, [points, candles, mode, stepped, precision, minSpan])
 
   return <div ref={container} className="w-full" style={{ height }} />
 }

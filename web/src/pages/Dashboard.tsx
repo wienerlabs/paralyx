@@ -89,7 +89,7 @@ export function Dashboard() {
           />
         </div>
         <div className="space-y-5 lg:col-span-3">
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid gap-5 xl:grid-cols-2">
             <Charts />
           </div>
           <ActivityList events={shared.events} title={t('activity')} />
