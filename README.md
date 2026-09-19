@@ -176,7 +176,7 @@ Five screens behind a sidebar, all reading from chain and from the anchor, nothi
 - **Hat aç.** Wallet setup (friendbot and trustlines on testnet) and the collateral plus borrow form.
 - **Takas.** The exchange card: USDC to lira cashes out through the anchor, lira to USDC repays the line.
 
-Charts use Reflector's mainnet FX oracle for USD/TRY (hourly points, as far back as the oracle keeps history) and Stellar DEX trade aggregations for XLM/USDC; the live values on the dashboard poll Reflector's `lastprice` and the mainnet XLM/USDC order book every 15 seconds. Hourly trend cards bucket contract events by ledger close time. Wallet connection is a custom modal over Stellar Wallets Kit.
+Charts run on TradingView's open source lightweight-charts: crosshair with a local-time tooltip, formatted price and time axes, a dashed last-price line, a lavender gradient area, and for XLM a candlestick view with a volume histogram and 24 hour, 7 day and 30 day ranges (Horizon trade aggregations at 15 minute, hourly and daily resolution). Calm series such as USD/TRY keep a minimum visible span so one kuruş of noise does not fill the frame. Colors follow the theme tokens live. Data: Reflector's mainnet FX oracle for USD/TRY (hourly points, as far back as the oracle keeps history) and Stellar DEX trade aggregations for XLM/USDC; the live values on the dashboard poll Reflector's `lastprice` and the mainnet XLM/USDC order book every 15 seconds. Hourly trend cards bucket contract events by ledger close time. Wallet connection is a custom modal over Stellar Wallets Kit.
 
 ### Design system
 
