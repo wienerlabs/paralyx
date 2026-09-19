@@ -18,7 +18,7 @@ export function Stats() {
       setEvents(activity)
     }
     void load()
-    const timer = setInterval(() => void load(), 15_000)
+    const timer = setInterval(() => void load(), 30_000)
     return () => {
       cancelled = true
       clearInterval(timer)

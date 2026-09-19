@@ -330,46 +330,64 @@ export interface ActivityEvent {
   anchorTxId?: string
 }
 
+function decodeEvent(event: rpc.Api.EventResponse): ActivityEvent | null {
+  const topics = event.topic.map((t) => scValToNative(t))
+  const kind = topics[1]
+  if (kind !== 'opened' && kind !== 'repaid' && kind !== 'payout') return null
+  const data = scValToNative(event.value) as Record<string, bigint | string>
+  if (kind === 'payout') {
+    return {
+      kind,
+      user: String(topics[2]),
+      ledger: event.ledger,
+      txHash: event.txHash,
+      a: BigInt(data.try_amount as bigint),
+      b: 0n,
+      anchorTxId: String(data.anchor_tx_id),
+    }
+  }
+  const first = kind === 'opened' ? data.collateral_amount : data.repay_amount
+  const second = kind === 'opened' ? data.borrow_amount : data.withdraw_collateral
+  return {
+    kind,
+    user: String(topics[2]),
+    ledger: event.ledger,
+    txHash: event.txHash,
+    a: BigInt(first as bigint),
+    b: BigInt(second as bigint),
+  }
+}
+
+function cursorLedger(cursor: string | undefined): number | null {
+  if (!cursor) return null
+  const toid = Number(String(cursor).split('-')[0])
+  return Number.isFinite(toid) ? Math.floor(toid / 4294967296) : null
+}
+
+async function collectEvents(startLedger: number): Promise<ActivityEvent[]> {
+  const filters = [{ type: 'contract' as const, contractIds: [CREDIT_LINE_CONTRACT] }]
+  const collected: ActivityEvent[] = []
+  let cursor: string | undefined
+  for (let page = 0; page < 12; page += 1) {
+    const response = cursor
+      ? await server.getEvents({ cursor, filters, limit: 200 })
+      : await server.getEvents({ startLedger, filters, limit: 200 })
+    for (const event of response.events) {
+      const decoded = decodeEvent(event)
+      if (decoded) collected.push(decoded)
+    }
+    const reached = cursorLedger(response.cursor)
+    if (!response.cursor || reached === null || reached >= response.latestLedger) break
+    cursor = response.cursor
+  }
+  return collected.reverse()
+}
+
 export async function getActivity(): Promise<ActivityEvent[]> {
   const latest = await server.getLatestLedger()
-  const windows = [17_280 * 6, 17_280 * 2, 17_280 / 4]
-  for (const span of windows) {
+  for (const span of [17_280 * 4, 17_280, 3_000]) {
     try {
-      const response = await server.getEvents({
-        startLedger: Math.max(1, latest.sequence - span),
-        filters: [{ type: 'contract', contractIds: [CREDIT_LINE_CONTRACT] }],
-        limit: 200,
-      })
-      return response.events
-        .map((event): ActivityEvent | null => {
-          const topics = event.topic.map((t) => scValToNative(t))
-          const kind = topics[1]
-          if (kind !== 'opened' && kind !== 'repaid' && kind !== 'payout') return null
-          const data = scValToNative(event.value) as Record<string, bigint | string>
-          if (kind === 'payout') {
-            return {
-              kind,
-              user: String(topics[2]),
-              ledger: event.ledger,
-              txHash: event.txHash,
-              a: BigInt(data.try_amount as bigint),
-              b: 0n,
-              anchorTxId: String(data.anchor_tx_id),
-            }
-          }
-          const first = kind === 'opened' ? data.collateral_amount : data.repay_amount
-          const second = kind === 'opened' ? data.borrow_amount : data.withdraw_collateral
-          return {
-            kind,
-            user: String(topics[2]),
-            ledger: event.ledger,
-            txHash: event.txHash,
-            a: BigInt(first as bigint),
-            b: BigInt(second as bigint),
-          }
-        })
-        .filter((event): event is ActivityEvent => event !== null)
-        .reverse()
+      return await collectEvents(Math.max(1, latest.sequence - span))
     } catch {
       continue
     }
