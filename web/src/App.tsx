@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { ConnectModal } from './components/ConnectModal'
 import { Header } from './components/Header'
 import { LangContext, type Lang } from './lib/i18n'
 import { WalletProvider } from './lib/wallet'
@@ -28,6 +29,7 @@ export default function App() {
         <BrowserRouter>
           <div className="min-h-screen bg-white text-ink">
             <Header />
+            <ConnectModal />
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/stats" element={<Stats />} />

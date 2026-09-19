@@ -3,6 +3,7 @@ import { CREDIT_LINE_CONTRACT, EXPLORER_CONTRACT } from '../config'
 import { formatAmount, fromStroops, getActivity, getLineCount, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
 import { ActivityList } from './Home'
+import { TokenIcon, type TokenSymbol } from '../components/TokenIcon'
 
 export function Stats() {
   const { t } = useT()
@@ -31,11 +32,11 @@ export function Stats() {
   const usdc = opened.reduce((sum, event) => sum + event.b, 0n)
   const tryPaid = payouts.reduce((sum, event) => sum + event.a, 0n)
 
-  const cards = [
+  const cards: { label: string; value: string; symbol?: TokenSymbol }[] = [
     { label: t('linesOpened'), value: count === null ? '·' : String(count) },
-    { label: t('xlmLocked'), value: `${fromStroops(xlm, 0)} XLM` },
-    { label: t('usdcBorrowed'), value: `${fromStroops(usdc)} USDC` },
-    { label: t('tryPaid'), value: `₺${formatAmount(Number(tryPaid) / 100)}` },
+    { label: t('xlmLocked'), value: `${fromStroops(xlm, 0)} XLM`, symbol: 'XLM' },
+    { label: t('usdcBorrowed'), value: `${fromStroops(usdc)} USDC`, symbol: 'USDC' },
+    { label: t('tryPaid'), value: `₺${formatAmount(Number(tryPaid) / 100)}`, symbol: 'TRY' },
   ]
 
   return (
@@ -53,7 +54,10 @@ export function Stats() {
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
           <div key={card.label} className="card">
-            <div className="text-xs text-mute">{card.label}</div>
+            <div className="flex items-center gap-2 text-xs text-mute">
+              {card.symbol ? <TokenIcon symbol={card.symbol} size={18} /> : null}
+              {card.label}
+            </div>
             <div className="mt-2 text-3xl tracking-tight text-ink">{card.value}</div>
           </div>
         ))}
