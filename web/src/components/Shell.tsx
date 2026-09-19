@@ -49,8 +49,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { t, lang, setLang } = useT()
   const { address, openConnect } = useWallet()
   return (
-    <div className="min-h-screen bg-white text-ink">
-      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-line bg-white px-4 py-6 lg:flex">
+    <div className="min-h-screen text-ink">
+      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-line bg-white/85 px-4 py-6 backdrop-blur lg:flex">
         <NavLink to="/" className="px-3 text-xl tracking-tight text-ink">
           Paralyx
         </NavLink>
@@ -71,7 +71,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="lg:pl-60">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-white/90 px-5 py-3 backdrop-blur">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-white/80 px-5 py-3 backdrop-blur">
           <NavLink to="/" className="text-lg tracking-tight text-ink lg:hidden">
             Paralyx
           </NavLink>

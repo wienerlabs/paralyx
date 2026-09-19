@@ -1,12 +1,15 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import { useT } from '../lib/i18n'
 import { useWallet } from '../lib/wallet'
 
 export function ConnectModal() {
   const { t } = useT()
   const { connectOpen, closeConnect, supported, connect, connecting } = useWallet()
+  const [showOthers, setShowOthers] = useState(false)
+  const installed = supported.filter((wallet) => wallet.isAvailable)
+  const others = supported.filter((wallet) => !wallet.isAvailable)
 
   useEffect(() => {
     if (!connectOpen) return
@@ -28,7 +31,7 @@ export function ConnectModal() {
           onClick={closeConnect}
         >
           <motion.div
-            className="w-full max-w-md rounded-3xl border border-line bg-white p-6 shadow-xl"
+            className="flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-line bg-white p-6 shadow-xl"
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -46,9 +49,9 @@ export function ConnectModal() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <ul className="mt-5 space-y-2">
+            <ul className="mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {supported.length === 0 ? <li className="rounded-2xl bg-soft p-4 text-sm text-mute">…</li> : null}
-              {supported.map((wallet, index) => (
+              {[...installed, ...(showOthers ? others : [])].map((wallet, index) => (
                 <motion.li
                   key={wallet.id}
                   initial={{ opacity: 0, y: 8 }}
@@ -77,6 +80,20 @@ export function ConnectModal() {
                   </motion.button>
                 </motion.li>
               ))}
+              {others.length > 0 ? (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setShowOthers((value) => !value)}
+                    className="flex w-full items-center justify-between rounded-2xl px-4 py-2.5 text-xs text-mute transition hover:text-ink"
+                  >
+                    <span>
+                      {t('otherWallets')} · {others.length}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 transition ${showOthers ? 'rotate-180' : ''}`} />
+                  </button>
+                </li>
+              ) : null}
             </ul>
             <p className="mt-4 text-xs text-mute">
               {t('network')}: Stellar testnet

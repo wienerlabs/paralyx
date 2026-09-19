@@ -324,6 +324,7 @@ export interface ActivityEvent {
   kind: 'opened' | 'repaid' | 'payout'
   user: string
   ledger: number
+  closedAt: number
   txHash: string
   a: bigint
   b: bigint
@@ -340,6 +341,7 @@ function decodeEvent(event: rpc.Api.EventResponse): ActivityEvent | null {
       kind,
       user: String(topics[2]),
       ledger: event.ledger,
+      closedAt: Date.parse(event.ledgerClosedAt) || 0,
       txHash: event.txHash,
       a: BigInt(data.try_amount as bigint),
       b: 0n,
@@ -352,6 +354,7 @@ function decodeEvent(event: rpc.Api.EventResponse): ActivityEvent | null {
     kind,
     user: String(topics[2]),
     ledger: event.ledger,
+    closedAt: Date.parse(event.ledgerClosedAt) || 0,
     txHash: event.txHash,
     a: BigInt(first as bigint),
     b: BigInt(second as bigint),

@@ -190,7 +190,7 @@ export function ExchangeCard({ signer, wallet, line, health, rate, refresh }: Sh
       mark(4, 'done', txLink(convertHash))
       mark(5, 'active')
       const fullRepay = received * 0.97 >= health.debtUsdc
-      const withdrawXlm = withdrawAll && fullRepay ? health.collateralXlm * 2 : 0
+      const withdrawXlm = withdrawAll && fullRepay ? health.collateralXlm * 1.002 : 0
       const hash = await repayLine(signer, toStroops(repayUsdc.toFixed(7)), toStroops(withdrawXlm.toFixed(7)))
       mark(5, 'done', txLink(hash))
       mark(6, 'done')

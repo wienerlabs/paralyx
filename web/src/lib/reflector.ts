@@ -2,12 +2,12 @@ import { Account, BASE_FEE, Contract, Keypair, TransactionBuilder, rpc, scValToN
 import type { Point } from '../components/PriceChart'
 
 const MAINNET_RPC = 'https://mainnet.sorobanrpc.com'
-const MAINNET_HORIZON = 'https://horizon.stellar.org'
+export const MAINNET_HORIZON = 'https://horizon.stellar.org'
 const MAINNET_PASSPHRASE = 'Public Global Stellar Network ; September 2015'
-const FX_ORACLE = 'CBKGPWGKSKZF52CFHMTRR23TBWTPMRDIYZ4O2P5VS65BMHYH4DXMCJZC'
-const MARKET_ORACLE = 'CAFJZQWSED6YAWZU3GWRTOCNPPCGBN32L7QV43XX5LZLFTK6JLN34DLN'
-const MAINNET_USDC_ISSUER = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
-const SCALE = 1e14
+export const FX_ORACLE = 'CBKGPWGKSKZF52CFHMTRR23TBWTPMRDIYZ4O2P5VS65BMHYH4DXMCJZC'
+export const MARKET_ORACLE = 'CAFJZQWSED6YAWZU3GWRTOCNPPCGBN32L7QV43XX5LZLFTK6JLN34DLN'
+export const MAINNET_USDC_ISSUER = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
+export const SCALE = 1e14
 const RESOLUTION = 300
 const MAX_RECORDS = 20
 
@@ -19,7 +19,7 @@ interface PriceRecord {
   timestamp: bigint
 }
 
-async function read(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
+export async function readMainnet(contractId: string, method: string, args: xdr.ScVal[]): Promise<unknown> {
   const tx = new TransactionBuilder(source, { fee: BASE_FEE, networkPassphrase: MAINNET_PASSPHRASE })
     .addOperation(new Contract(contractId).call(method, ...args))
     .setTimeout(30)
@@ -29,7 +29,7 @@ async function read(contractId: string, method: string, args: xdr.ScVal[]): Prom
   return scValToNative(sim.result.retval)
 }
 
-function other(code: string): xdr.ScVal {
+export function otherAsset(code: string): xdr.ScVal {
   return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Other'), xdr.ScVal.scvSymbol(code)])
 }
 
@@ -38,7 +38,7 @@ function toPoint(record: PriceRecord, transform: (price: number) => number): Poi
 }
 
 async function recentPrices(contractId: string, code: string, transform: (price: number) => number): Promise<Point[]> {
-  const raw = (await read(contractId, 'prices', [other(code), xdr.ScVal.scvU32(MAX_RECORDS)])) as PriceRecord[] | null
+  const raw = (await readMainnet(contractId, 'prices', [otherAsset(code), xdr.ScVal.scvU32(MAX_RECORDS)])) as PriceRecord[] | null
   if (!raw) return []
   return raw.map((record) => toPoint(record, transform)).reverse()
 }
@@ -49,7 +49,7 @@ async function hourlyPrices(contractId: string, code: string, transform: (price:
   const results = await Promise.all(
     stamps.map(async (stamp) => {
       try {
-        const record = (await read(contractId, 'price', [other(code), xdr.ScVal.scvU64(BigInt(stamp))])) as PriceRecord | null
+        const record = (await readMainnet(contractId, 'price', [otherAsset(code), xdr.ScVal.scvU64(BigInt(stamp))])) as PriceRecord | null
         return record ? { t: stamp * 1000, v: transform(Number(record.price) / SCALE) } : null
       } catch {
         return null

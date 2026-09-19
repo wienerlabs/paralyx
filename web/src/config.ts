@@ -26,3 +26,4 @@ export const ANCHOR_MAX_TRY = 3000
 export const SCALAR_7 = 10_000_000n
 export const SCALAR_12 = 1_000_000_000_000n
 export const SAFETY_BUFFER = 0.97
+export const SHOW_BACKGROUND = true

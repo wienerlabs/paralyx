@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ensureTrustlines, formatAmount, fromStroops, fundWithFriendbot, openLine, previewBorrowable, toStroops, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
+import { useLivePrices } from '../lib/prices'
 import { getTryPerUsdHistory, getXlmUsdHistory } from '../lib/reflector'
 import { txLink, useFlow, type Shared } from '../lib/shared'
 import { MotionButton } from './MotionButton'
@@ -235,12 +236,19 @@ function spanLabel(points: Point[], template: string): string {
 
 export function Charts() {
   const { t } = useT()
+  const live = useLivePrices()
   const [tryPoints, setTryPoints] = useState<Point[]>([])
   const [xlmPoints, setXlmPoints] = useState<Point[]>([])
   useEffect(() => {
-    getTryPerUsdHistory().then(setTryPoints).catch(() => setTryPoints([]))
-    getXlmUsdHistory().then(setXlmPoints).catch(() => setXlmPoints([]))
+    const load = () => {
+      getTryPerUsdHistory().then(setTryPoints).catch(() => setTryPoints([]))
+      getXlmUsdHistory().then(setXlmPoints).catch(() => setXlmPoints([]))
+    }
+    load()
+    const timer = setInterval(load, 60_000)
+    return () => clearInterval(timer)
   }, [])
+  const stamp = live.updatedAt ? `${t('live')} · ${new Date(live.updatedAt).toLocaleTimeString('tr-TR')}` : t('live')
   return (
     <>
       <PriceChart
@@ -250,6 +258,8 @@ export function Charts() {
         format={(value) => `₺${formatAmount(value)}`}
         icon={<TokenIcon symbol="TRY" size={32} />}
         footer={spanLabel(tryPoints, t('lastHours'))}
+        live={live.tryPerUsd}
+        liveLabel={stamp}
       />
       <PriceChart
         title={t('chartXlm')}
@@ -258,6 +268,8 @@ export function Charts() {
         format={(value) => `$${formatAmount(value, 4)}`}
         icon={<TokenIcon symbol="XLM" size={32} />}
         footer={spanLabel(xlmPoints, t('lastHours'))}
+        live={live.xlmUsd}
+        liveLabel={stamp}
       />
     </>
   )

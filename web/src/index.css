@@ -31,13 +31,37 @@ body {
   background: #ffffff;
 }
 
+html.paralyx-bg body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: url("/bg/gradient.jpg") center / cover no-repeat;
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+@keyframes paralyx-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.6); opacity: 0.4; }
+}
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #111111;
+  animation: paralyx-pulse 1.6s ease-in-out infinite;
+}
+
 * {
   font-weight: 300;
 }
 
 @layer components {
   .card {
-    @apply rounded-3xl border border-line bg-white p-6;
+    @apply rounded-3xl border border-line bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.03)];
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-full border border-ink bg-ink px-5 py-2.5 text-sm text-white transition hover:bg-white hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-ink disabled:hover:text-white;

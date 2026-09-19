@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { ConnectModal } from './components/ConnectModal'
+import { SHOW_BACKGROUND } from './config'
 import { Shell } from './components/Shell'
 import { LangContext, type Lang } from './lib/i18n'
 import { WalletProvider } from './lib/wallet'
@@ -18,6 +19,9 @@ export default function App() {
       return 'tr'
     }
   })
+  useEffect(() => {
+    document.documentElement.classList.toggle('paralyx-bg', SHOW_BACKGROUND)
+  }, [])
   const update = (next: Lang) => {
     setLang(next)
     try {

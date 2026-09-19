@@ -17,7 +17,7 @@ import { useWallet } from './wallet'
 
 let rateCache: { at: number; value: number } | null = null
 
-export function useShared(): Shared & { events: ActivityEvent[]; loading: boolean } {
+export function useShared(): Shared & { events: ActivityEvent[]; allEvents: ActivityEvent[]; loading: boolean } {
   const { address, signer } = useWallet()
   const [wallet, setWallet] = useState<WalletState | null>(null)
   const [line, setLine] = useState<Line | null>(null)
@@ -25,6 +25,7 @@ export function useShared(): Shared & { events: ActivityEvent[]; loading: boolea
   const [reserves, setReserves] = useState<{ xlm: ReserveView; usdc: ReserveView } | null>(null)
   const [rate, setRate] = useState<number | null>(rateCache?.value ?? null)
   const [events, setEvents] = useState<ActivityEvent[]>([])
+  const [allEvents, setAllEvents] = useState<ActivityEvent[]>([])
   const [loading, setLoading] = useState(false)
 
   const refresh = useCallback(async () => {
@@ -33,6 +34,9 @@ export function useShared(): Shared & { events: ActivityEvent[]; loading: boolea
       setLine(null)
       setHealth(null)
       setEvents([])
+      getActivity()
+        .then(setAllEvents)
+        .catch(() => setAllEvents([]))
       return
     }
     setLoading(true)
@@ -46,6 +50,7 @@ export function useShared(): Shared & { events: ActivityEvent[]; loading: boolea
       setWallet(walletState)
       setLine(lineState)
       setHealth(healthState)
+      setAllEvents(activity)
       setEvents(activity.filter((event) => event.user === address))
     } finally {
       setLoading(false)
@@ -67,5 +72,5 @@ export function useShared(): Shared & { events: ActivityEvent[]; loading: boolea
       .catch(() => setRate(null))
   }, [])
 
-  return { signer, wallet, line, health, reserves, rate, refresh, events, loading }
+  return { signer, wallet, line, health, reserves, rate, refresh, events, allEvents, loading }
 }

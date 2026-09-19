@@ -5,6 +5,7 @@ import { formatAmount, getActivity, type ActivityEvent } from '../lib/chain'
 import { useT } from '../lib/i18n'
 import { PriceChart, type Point } from '../components/PriceChart'
 import { TokenIcon } from '../components/TokenIcon'
+import { hourlyBuckets, TrendCard } from '../components/TrendCard'
 
 function cumulative(events: ActivityEvent[], pick: (event: ActivityEvent) => number): Point[] {
   const ordered = [...events].sort((a, b) => a.ledger - b.ledger)
@@ -53,6 +54,12 @@ export function Market() {
   }, [])
 
   const tryPoints = useMemo(() => cumulative(events.filter((event) => event.kind === 'payout'), (event) => Number(event.a) / 100), [events])
+  const payoutBuckets = useMemo(
+    () => hourlyBuckets(events.filter((event) => event.kind === 'payout').map((event) => ({ closedAt: event.closedAt, value: Number(event.a) / 100 }))),
+    [events],
+  )
+  const payoutTotal = events.filter((event) => event.kind === 'payout').reduce((sum, event) => sum + Number(event.a) / 100, 0)
+  const payoutLastHour = payoutBuckets[payoutBuckets.length - 1]?.value ?? 0
   const usdcPoints = useMemo(() => cumulative(events.filter((event) => event.kind === 'opened'), (event) => Number(event.b) / 10_000_000), [events])
 
   const cards = [
@@ -146,7 +153,17 @@ export function Market() {
             {CREDIT_LINE_CONTRACT.slice(0, 8)}…{CREDIT_LINE_CONTRACT.slice(-6)}
           </a>
         </div>
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-3">
+          <TrendCard
+            title={t('trendPayouts')}
+            subtitle={t('trendSub')}
+            data={payoutBuckets}
+            totalLabel={t('totalLabel')}
+            totalValue={`₺${formatAmount(payoutTotal)}`}
+            newLabel={t('lastHour')}
+            newValue={`₺${formatAmount(payoutLastHour)}`}
+            format={(value) => `₺${formatAmount(value)}`}
+          />
           <PriceChart
             title={t('cumulativeTry')}
             subtitle={t('fromEvents')}

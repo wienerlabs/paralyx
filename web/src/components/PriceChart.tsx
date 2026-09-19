@@ -16,6 +16,8 @@ export function PriceChart({
   format,
   icon,
   footer,
+  live,
+  liveLabel,
 }: {
   title: string
   subtitle: string
@@ -23,6 +25,8 @@ export function PriceChart({
   format: (value: number) => string
   icon?: ReactNode
   footer?: string
+  live?: number | null
+  liveLabel?: string
 }) {
   const geometry = useMemo(() => {
     if (points.length < 2) return null
@@ -53,8 +57,13 @@ export function PriceChart({
           </div>
         </div>
         <div className="text-right">
-          <div className="text-lg text-ink">{geometry ? format(geometry.last) : '·'}</div>
-          {change !== null ? (
+          <div className="flex items-center justify-end gap-2 text-lg text-ink">
+            {live !== undefined && live !== null ? <span className="live-dot" /> : null}
+            {live !== undefined && live !== null ? format(live) : geometry ? format(geometry.last) : '·'}
+          </div>
+          {live !== undefined && live !== null && liveLabel ? (
+            <div className="text-xs text-mute">{liveLabel}</div>
+          ) : change !== null ? (
             <div className="text-xs text-mute">
               {change >= 0 ? '+' : ''}
               {change.toFixed(2)}%
