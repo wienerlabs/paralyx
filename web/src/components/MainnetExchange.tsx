@@ -86,6 +86,11 @@ function ExchangeCashOut({ signer, wallet, rate, refresh }: Shared) {
     setConfirmed(false)
   }, [trimmed, exchangeId])
 
+  useEffect(() => {
+    const initial = exchanges[0].deposit
+    if (initial) void verify(initial)
+  }, [])
+
   const verify = async (address: string) => {
     if (!/^G[A-Z2-7]{55}$/.test(address)) return
     setChecking(true)
