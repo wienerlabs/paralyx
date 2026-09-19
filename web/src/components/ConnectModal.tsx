@@ -41,9 +41,12 @@ export function ConnectModal() {
             aria-modal="true"
           >
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl text-ink">{t('connectTitle')}</h2>
-                <p className="mt-1 text-sm text-mute">{t('connectBody')}</p>
+              <div className="flex items-start gap-3">
+                <img src="/brand/paralyx-mark-256.png" alt="" className="mt-0.5 h-8 w-8" draggable={false} />
+                <div>
+                  <h2 className="text-xl text-ink">{t('connectTitle')}</h2>
+                  <p className="mt-1 text-sm text-mute">{t('connectBody')}</p>
+                </div>
               </div>
               <button type="button" onClick={closeConnect} className="rounded-full border border-line p-2 text-mute transition hover:border-ink hover:text-ink" aria-label={t('close')}>
                 <X className="h-4 w-4" />

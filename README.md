@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/brand/paralyx-mark.png" alt="Paralyx" width="88" /></p>
+
 # Paralyx
 
 **Turkish lira liquidity without selling your XLM.** Post XLM as collateral to a Blend v2 pool, borrow USDC, cash the USDC out as lira to a bank account through a SEP-6 anchor, and repay in lira. Everything runs on Stellar testnet.

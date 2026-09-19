@@ -52,7 +52,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen text-ink">
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-line bg-white/85 px-4 py-6 backdrop-blur lg:flex">
-        <NavLink to="/" className="px-3 text-xl tracking-tight text-ink">
+        <NavLink to="/" className="flex items-center gap-2.5 px-3 text-xl tracking-tight text-ink">
+          <img src="/brand/paralyx-mark-256.png" alt="" className="h-7 w-7" draggable={false} />
           Paralyx
         </NavLink>
         <div className="mt-8 space-y-1">
@@ -73,7 +74,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <div className="lg:pl-60">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-white/80 px-5 py-3 backdrop-blur">
-          <NavLink to="/" className="text-lg tracking-tight text-ink lg:hidden">
+          <NavLink to="/" className="flex items-center gap-2 text-lg tracking-tight text-ink lg:hidden">
+            <img src="/brand/paralyx-mark-256.png" alt="" className="h-6 w-6" draggable={false} />
             Paralyx
           </NavLink>
           <div className="hidden text-sm text-mute lg:block">{t('tagline')}</div>
