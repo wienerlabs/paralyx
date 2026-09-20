@@ -72,3 +72,13 @@ Our contract is under two hundred lines and sits on top of Blend: the user signs
 Wiener Labs, İstanbul: Baturalp sözleşmeyi, uygulamayı ve entegrasyonları yazdı; Abdullah ürün ve pazar tarafında. İki kişi, bir hafta sonu, iki ağda canlı sözleşme. Sizden iki şey istiyoruz: SCF Build başvurusu için destek ve lisanslı bir TRY anchor adayıyla tanışmak.
 
 Wiener Labs, Istanbul: Baturalp wrote the contract, the app and the integrations; Abdullah runs product and go-to-market. Two people, one weekend, a contract live on both networks. We are asking for two things: support for an SCF Build application and an introduction to a licensed TRY anchor candidate.
+
+## Footers, small gold lines at the bottom of each slide
+
+Added on 20 September 2026 in the deck, same muted gold as the template's date line, 24 px.
+
+- Cover: `paralyx.vercel.app · github.com/wienerlabs/paralyx · live on Stellar mainnet and testnet`
+- The Solution: `Testnet proof: 4 USDC out, ₺194,16 to the IBAN, bank reference FAST-2HK1C18LOO, payout recorded on chain.` / `Mainnet proof: 4.73 USDC to Paribu as XLM in one path payment, tx e661cba9…bce80, recorded on chain.`
+- PMF: `Source: Chainalysis, The 2024 Geography of Cryptocurrency Report.` / `The credit engine already exists: Blend v2 mainnet holds $193.7M supplied, read from chain, 20 Sep 2026.`
+- Technical Workflow: both full contract IDs, `Same wasm on both networks, 8 unit tests, nested auth proven on chain before any UI.`, `Built on Blend v2, TR anchor SEP-6, Stellar Wallets Kit, Reflector, Stellar DEX, USDT0 over LayerZero.`
+- The Team, between the avatars: `Next: licensed TRY anchor pilot, SCF Build Integration track, DeFindex yield on collateral, CCTP entry, Private Payments.` and `Stellar Skills used: stellar-dev-skill cross-chain, security, dapp; stellar-hackathon-turkiye anchor skill.`
