@@ -57,10 +57,11 @@ SPK çerçevesi lisanslı anchor adaylarını yarattı. USDT0 ve CCTP Stellar'a 
 
 ## Söylemeyin
 
-- "Gerçek lira gönderdik." Göndermedik, sandbox.
-- "USDT0 entegre." Değil, mainnet'te olacak; uygulamada "yakında" kartı var.
+- "Testnet'te gerçek lira gönderdik." Göndermedik, testnet bankası sandbox. Mainnet'te gerçek olan şu: USDC tek path payment ile Paribu yatırma cüzdanına XLM olarak gitti, lira çekimi borsada yapılıyor.
+- "Mainnet'te borç aldık." Almadık. Blend havuzları Ağustos backstop olayından beri on-ice; mainnet'te teminat yatırma, geri ödeme ve çekim çalışıyor, borçlanma Blend açınca kendiliğinden açılıyor.
+- "USDT0 testnet'te çalışıyor." Çalışmıyor, USDT0 sadece mainnet'te var. Mainnet takas sayfasında USDT0 ile geri ödeme entegre.
 - "Blend'i yeniden yazdık." Yazmadık, üstüne kurduk; bu bir güç.
-- "Denetlendi." Denetlenmedi; mainnet öncesi denetim planda.
+- "Denetlendi." Denetlenmedi. Mainnet sözleşmesi küçük tutarlar için, denetim planda.
 
 ## Jüri sorusu gelirse
 
