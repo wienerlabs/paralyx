@@ -38,3 +38,37 @@ Sentence: Wiener Labs, Istanbul. Two people, one weekend, a contract live on bot
 - Baturalp Güvenç, founder: Soroban contract, app, Blend and anchor work.
 - Abdullah Valisoy: product, pitch, go-to-market.
 - github.com/wienerlabs/paralyx · paralyx.vercel.app
+
+## Speech, one breath per slide
+
+Also stored in the deck's speaker notes. Turkish first, English below it.
+
+### 1. Cover
+
+Merhaba, biz Paralyx. Türkiye'deki kripto sahibi için tek cümle: XLM'ini satmadan liraya ulaş. Teminat koy, USDC borçlan, lira IBAN'ına gelsin, lirayla kapat.
+
+We are Paralyx. Turkish lira liquidity without selling your XLM: post collateral, borrow USDC, lira lands in your IBAN, repay in lira.
+
+### 2. The Solution
+
+Ürün tek ekran, üç eylem: hat aç, lira çek, lirayla geri öde. Krediyi Blend v2 havuzu veriyor, lirayı anchor ödüyor; Paralyx hiçbir noktada fon tutmuyor. Bu döngü testnet'te uçtan uca çalışıyor, aynı sözleşme mainnet'te gerçek XLM ve USDC ile canlı.
+
+One screen, three actions: open a line, cash out lira, repay in lira. Blend v2 is the lender and the anchor pays the lira; Paralyx never holds funds. The full loop runs on testnet, and the same contract is live on mainnet with real XLM and USDC.
+
+### 3. PMF
+
+Türkiye, milli gelirine oranla dünyada en çok stablecoin alan ülke: yüzde 4,3. Bu insanlar liraya ihtiyaç duyduğunda tek seçenekleri satmak; satınca pozisyon gidiyor, makas iki kez ödeniyor. Biz olgun her piyasada olan ikinci seçeneği getiriyoruz: varlığını satmadan borçlan.
+
+Türkiye buys more stablecoins relative to GDP than any country in the world, 4.3 percent. When these holders need lira, the only option is to sell: the position is gone and they pay the spread twice. We bring the second option every mature market has: borrow against the asset instead of selling it.
+
+### 4. Technical Workflow
+
+Sözleşmemiz iki yüz satırın altında ve Blend'in üstüne kurulu: kullanıcı bir kez imzalıyor, sözleşme iç içe yetkiyle teminatı koyup borcu çekiyor. Lira bacağı Stellar standartları: SEP-10 giriş, SEP-38 kur, SEP-6 çekim ve yatırma; kur Reflector'dan, her ödeme zincire yazılıyor. Lisanslı TRY anchor'ı açıldığında tek değişiklik home domain.
+
+Our contract is under two hundred lines and sits on top of Blend: the user signs once, and nested authorization posts the collateral and draws the debt. The lira leg is pure Stellar standards, SEP-10 login, SEP-38 quote, SEP-6 in and out, with Reflector rates and every payout recorded on chain. When a licensed TRY anchor opens, the only change is a home domain.
+
+### 5. The Team
+
+Wiener Labs, İstanbul: Baturalp sözleşmeyi, uygulamayı ve entegrasyonları yazdı; Abdullah ürün ve pazar tarafında. İki kişi, bir hafta sonu, iki ağda canlı sözleşme. Sizden iki şey istiyoruz: SCF Build başvurusu için destek ve lisanslı bir TRY anchor adayıyla tanışmak.
+
+Wiener Labs, Istanbul: Baturalp wrote the contract, the app and the integrations; Abdullah runs product and go-to-market. Two people, one weekend, a contract live on both networks. We are asking for two things: support for an SCF Build application and an introduction to a licensed TRY anchor candidate.
